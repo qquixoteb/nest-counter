@@ -15,14 +15,14 @@
     --bg: #0D2426; --bg-grad: #0A1B1D; --surface: #143338; --surface-2: #1B4048; --line: #24494F;
     --ink: #EDE6D6; --ink-muted: #8FAFAE; --gold: #F4B942;
     --log: #C97B3D; --grn: #4F9D69; --kmp: #9AA05A; --lth: #7C8A92; --rare: #E2667B; --danger: #D9695C;
-    --live-red: #E8483C;
+    --live-red: #E8483C; --excel-green: #217346;
     --radius: 14px;
   }
   body.light-mode{
     --bg: #FFFFFF; --bg-grad: #F2F2EC; --surface: #F1F1EA; --surface-2: #E5E5DC; --line: #CFCFC4;
     --ink: #000000; --ink-muted: #5A5A50; --gold: #A8720E;
     --log: #A85D24; --grn: #2F6B41; --kmp: #6B7536; --lth: #4E5B62; --rare: #B83A50; --danger: #A83226;
-    --live-red: #C7301F;
+    --live-red: #C7301F; --excel-green: #1A5C38;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -46,7 +46,7 @@
   .banner.show{display:block;}
   .banner b{color:var(--gold);}
 
-  .grid{ display:flex; flex-direction:column; gap:12px; }
+  .grid{ display:flex; flex-direction:column; gap:12px; margin-bottom:10px; }
 
   .card{ background: var(--surface); border:1px solid var(--line); border-radius: var(--radius); padding:14px; position:relative; overflow:hidden; transition: box-shadow .25s ease, border-color .25s ease; }
   .card .accent-bar{ position:absolute; left:0; top:0; bottom:0; width:4px; }
@@ -91,7 +91,7 @@
   .gh-edit{ background:none; border:none; color:var(--gold); cursor:pointer; font-size:12px; text-decoration:underline; margin-top:8px; padding:0;}
   .gh-summary{ font-size:12px; color:var(--ink-muted); margin-top:5px; line-height:1.5; font-family:'IBM Plex Mono',monospace; }
 
-  .export-btn{ width:100%; background:var(--surface-2); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:13px; font-size:14px; font-weight:600; cursor:pointer; margin-top:18px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .export-btn{ width:100%; background:var(--excel-green); border:1px solid var(--excel-green); color:#FFFFFF; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; margin-top:18px; display:flex; align-items:center; justify-content:center; gap:8px; }
   .new-day-btn{ width:100%; background:transparent; border:1px solid var(--rare); color:var(--rare); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; cursor:pointer; margin-top:10px; }
   .new-day-hint{ font-size:11px; color:var(--ink-muted); text-align:center; margin-top:6px; line-height:1.4; padding:0 8px; }
   .fab{ position:fixed; left:14px; right:14px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index:40; background:var(--gold); color:#2A1D05; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
@@ -211,7 +211,7 @@
 <div class="log-section">
   <div class="log-head">
     <h2>Index Nest Log</h2>
-    <button class="copy-btn" id="copyLogBtn">Copy all</button>
+    <button class="copy-btn" id="addIndexEntryBtn">+ Add</button>
   </div>
   <div id="logList"></div>
 </div>
@@ -272,6 +272,25 @@
     <div class="modal-index-flag" id="captureFlag">
       <div class="flag-num" id="captureNestNum">—</div>
       <div class="flag-txt" id="captureFlagText">Index nest — capture location before you move on.</div>
+    </div>
+    <div class="field" id="manualSpeciesWrap" style="display:none;">
+      <label>Species</label>
+      <select id="manualCaptureSpecies">
+        <option value="" disabled selected>Select species…</option>
+        <option value="loggerhead">Loggerhead</option>
+        <option value="green">Green</option>
+        <option value="leatherback">Leatherback</option>
+        <option value="kemps">Kemp's Ridley</option>
+        <option value="other">Other (specify)</option>
+      </select>
+    </div>
+    <div class="field" id="manualOtherNameWrap" style="display:none;">
+      <label>Species name</label>
+      <input type="text" id="manualCaptureOtherName" placeholder="e.g. Hawksbill">
+    </div>
+    <div class="field" id="manualNestNumWrap" style="display:none;">
+      <label>Nest number</label>
+      <input type="text" id="manualCaptureNestNum" placeholder="e.g. 47, or leave blank if unknown">
     </div>
     <div class="queue-note" id="queueNote" style="display:none;"></div>
     <div class="field"><label>Grid number</label><input type="number" id="gridInput" inputmode="numeric"></div>
@@ -452,27 +471,34 @@
       <div class="settings-row"><span>Kemp's Ridley</span><input type="number" id="editKmp"></div>
     </div>
     <div class="sheet-actions"><button class="btn btn-primary" id="saveSettingsBtn" style="flex:1;">Save</button></div>
-    <div class="settings-group" style="margin-top:22px;">
-      <h3>Grid map</h3>
-      <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-          <div class="grid-live-result" id="gridLiveResultSettings">—</div>
-          <button type="button" class="copy-btn" id="toggleGridTrackingBtnSettings">▶ Start</button>
+
+    <button type="button" id="advancedSettingsToggle" style="width:100%; background:none; border:1px solid var(--line); color:var(--ink-muted); border-radius:10px; padding:11px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:22px;">
+      <span>Additional Settings</span><span id="advancedSettingsArrow">▸</span>
+    </button>
+    <div id="advancedSettingsContent" style="display:none;">
+      <div class="settings-group" style="margin-top:14px;">
+        <h3>Grid map</h3>
+        <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
+          <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div class="grid-live-result" id="gridLiveResultSettings">—</div>
+            <button type="button" class="copy-btn" id="toggleGridTrackingBtnSettings">▶ Start</button>
+          </div>
         </div>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Ships with the current grid post survey built in. Load a newer file here if posts get updated — applies immediately and becomes the new default.</div>
+        <button class="reset-btn" id="updateGridsBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Update Grids</button>
+        <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
       </div>
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Ships with the current grid post survey built in. Load a newer file here if posts get updated — applies immediately and becomes the new default.</div>
-      <button class="reset-btn" id="updateGridsBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Update Grids</button>
-      <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
+      <input type="file" id="gridMapUpdateInput" accept=".xlsx" style="display:none;">
+      <div class="settings-group" style="margin-top:22px;">
+        <h3>Backup</h3>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Saves everything — counts, next-index numbers, grid history, index nests, subsequent sightings. Use this to move your season's data to a new copy of this tool (like the hosted version) rather than re-entering it by hand.</div>
+        <button class="reset-btn" id="exportBackupBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Export Backup (JSON)</button>
+        <button class="reset-btn" id="importBackupBtn">Import Backup (JSON)</button>
+      </div>
+      <input type="file" id="backupImportInput" accept=".json" style="display:none;">
     </div>
-    <input type="file" id="gridMapUpdateInput" accept=".xlsx" style="display:none;">
-    <div class="settings-group" style="margin-top:22px;">
-      <h3>Backup</h3>
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Saves everything — counts, next-index numbers, grid history, index nests, subsequent sightings. Use this to move your season's data to a new copy of this tool (like the hosted version) rather than re-entering it by hand.</div>
-      <button class="reset-btn" id="exportBackupBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Export Backup (JSON)</button>
-      <button class="reset-btn" id="importBackupBtn">Import Backup (JSON)</button>
-    </div>
-    <input type="file" id="backupImportInput" accept=".json" style="display:none;">
+
     <div class="settings-group" style="margin-top:22px;">
       <h3>Reset</h3>
       <button class="reset-btn" id="resetAllBtn">Reset all data on this device</button>
@@ -501,6 +527,7 @@
   let subsequentQueue = [];
   let pendingCapture = null;
   let editingIndexId = null;
+  let manualEntryMode = false;
   let editingSubId = null;
   let rareBlockIdx = 0;
 
@@ -1248,38 +1275,60 @@
     buttons.forEach(b=>b.textContent = '■ Stop');
   }
 
+  let gridHistoryExpanded = false;
+
+  function gridHistoryItemHtml(g){
+    const when = new Date(g.ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const parts = [];
+    FIXED_TALLY_SPECIES.forEach(meta=>{
+      const t = g.tallies[meta.id];
+      const bits = [];
+      if(t.fca) bits.push(`${t.fca} FC↑`);
+      if(t.fcb) bits.push(`${t.fcb} FC↓`);
+      if(t.na) bits.push(`${t.na} N↑`);
+      if(t.nb) bits.push(`${t.nb} N↓`);
+      if(t.pred) bits.push(`${t.pred} pred`);
+      if(bits.length) parts.push(`${meta.label}: ${bits.join(', ')}`);
+    });
+    (g.tallies.rare||[]).forEach(r=>{
+      const bits=[];
+      if(r.fca) bits.push(`${r.fca} FC↑`);
+      if(r.fcb) bits.push(`${r.fcb} FC↓`);
+      if(r.na) bits.push(`${r.na} N↑`);
+      if(r.nb) bits.push(`${r.nb} N↓`);
+      if(r.pred) bits.push(`${r.pred} pred`);
+      if(bits.length) parts.push(`${rareLabel(r)}: ${bits.join(', ')}`);
+    });
+    const summary = parts.length ? parts.join(' · ') : 'No activity recorded';
+    return `<div class="grid-history-item">
+      <div class="gh-top"><span>Grid ${escapeHtml(String(g.gridNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
+      <div class="gh-summary">${escapeHtml(summary)}</div>
+      <button class="gh-edit" data-id="${g.id}">Edit grid #</button>
+    </div>`;
+  }
+
   function renderGridHistory(){
     const wrap = document.getElementById('gridHistoryList');
-    if(state.grids.length===0){ wrap.innerHTML = '<div class="log-empty">No grids logged yet.</div>'; return; }
-    wrap.innerHTML = state.grids.map(g=>{
-      const when = new Date(g.ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-      const parts = [];
-      FIXED_TALLY_SPECIES.forEach(meta=>{
-        const t = g.tallies[meta.id];
-        const bits = [];
-        if(t.fca) bits.push(`${t.fca} FC↑`);
-        if(t.fcb) bits.push(`${t.fcb} FC↓`);
-        if(t.na) bits.push(`${t.na} N↑`);
-        if(t.nb) bits.push(`${t.nb} N↓`);
-        if(t.pred) bits.push(`${t.pred} pred`);
-        if(bits.length) parts.push(`${meta.label}: ${bits.join(', ')}`);
+    if(state.grids.length===0){ wrap.innerHTML = '<div class="log-empty">No grids logged yet.</div>'; gridHistoryExpanded = false; return; }
+
+    const visible = gridHistoryExpanded ? state.grids : state.grids.slice(0,2);
+    let html = visible.map(gridHistoryItemHtml).join('');
+    if(state.grids.length > 2){
+      const hiddenCount = state.grids.length - 2;
+      html += gridHistoryExpanded
+        ? `<button type="button" class="copy-btn" id="gridHistoryToggle" style="width:100%;">Show fewer</button>`
+        : `<button type="button" class="copy-btn" id="gridHistoryToggle" style="width:100%;">Show ${hiddenCount} more</button>`;
+    }
+    wrap.innerHTML = html;
+
+    const toggle = document.getElementById('gridHistoryToggle');
+    if(toggle){
+      toggle.addEventListener('click', ()=>{
+        gridHistoryExpanded = !gridHistoryExpanded;
+        renderGridHistory();
       });
-      (g.tallies.rare||[]).forEach(r=>{
-        const bits=[];
-        if(r.fca) bits.push(`${r.fca} FC↑`);
-        if(r.fcb) bits.push(`${r.fcb} FC↓`);
-        if(r.na) bits.push(`${r.na} N↑`);
-        if(r.nb) bits.push(`${r.nb} N↓`);
-        if(r.pred) bits.push(`${r.pred} pred`);
-        if(bits.length) parts.push(`${rareLabel(r)}: ${bits.join(', ')}`);
-      });
-      const summary = parts.length ? parts.join(' · ') : 'No activity recorded';
-      return `<div class="grid-history-item">
-        <div class="gh-top"><span>Grid ${escapeHtml(String(g.gridNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
-        <div class="gh-summary">${escapeHtml(summary)}</div>
-        <button class="gh-edit" data-id="${g.id}">Edit grid #</button>
-      </div>`;
-    }).join('');
+    }
+
     wrap.querySelectorAll('.gh-edit').forEach(b=>{
       b.addEventListener('click', async ()=>{
         const g = state.grids.find(x=>x.id===b.dataset.id);
@@ -1357,6 +1406,11 @@
   function openCaptureModal(req){
     pendingCapture = req;
     editingIndexId = null;
+    manualEntryMode = false;
+    document.getElementById('captureFlag').style.display = 'flex';
+    document.getElementById('manualSpeciesWrap').style.display = 'none';
+    document.getElementById('manualOtherNameWrap').style.display = 'none';
+    document.getElementById('manualNestNumWrap').style.display = 'none';
     document.getElementById('captureTitle').textContent = req.speciesLabel + ' — Index Nest';
     document.getElementById('captureNestNum').textContent = req.nestNumber ? ('#'+req.nestNumber) : '★';
     document.getElementById('captureFlagText').textContent = req.nestNumber
@@ -1372,7 +1426,7 @@
     document.getElementById('captureDisturbanceOtherWrap').style.display = 'none';
     document.getElementById('captureDisturbanceOther').value = '';
     document.getElementById('captureScreened').value = 'N';
-    document.getElementById('captureWhiteStake').value = 'N';
+    document.getElementById('captureWhiteStake').value = 'Y';
     document.getElementById('captureRelocated').value = 'N';
 
     const qNote = document.getElementById('queueNote');
@@ -1390,6 +1444,11 @@
     if(!entry) return;
     pendingCapture = null;
     editingIndexId = id;
+    manualEntryMode = false;
+    document.getElementById('captureFlag').style.display = 'flex';
+    document.getElementById('manualSpeciesWrap').style.display = 'none';
+    document.getElementById('manualOtherNameWrap').style.display = 'none';
+    document.getElementById('manualNestNumWrap').style.display = 'none';
     document.getElementById('captureTitle').textContent = 'Edit — ' + entry.speciesLabel;
     document.getElementById('captureNestNum').textContent = entry.nestNumber ? ('#'+entry.nestNumber) : '★';
     document.getElementById('captureFlagText').textContent = entry.nestNumber
@@ -1408,7 +1467,7 @@
     document.getElementById('captureDisturbanceOtherWrap').style.display = entry.disturbanceCode==='O' ? 'block' : 'none';
     document.getElementById('captureDisturbanceOther').value = entry.disturbanceOther || '';
     document.getElementById('captureScreened').value = entry.screened || 'N';
-    document.getElementById('captureWhiteStake').value = entry.whiteStake || 'N';
+    document.getElementById('captureWhiteStake').value = entry.whiteStake || 'Y';
     document.getElementById('captureRelocated').value = entry.relocated || 'N';
 
     document.getElementById('queueNote').style.display = 'none';
@@ -1416,6 +1475,36 @@
     status.textContent = entry.lat && entry.lon ? 'Existing coordinates shown below — tap the button above for a fresh GPS fix' : 'Not yet captured — tap the button above';
     status.className = 'gps-status';
 
+    document.getElementById('captureOverlay').classList.add('show');
+  }
+
+  function openManualCapture(){
+    pendingCapture = null;
+    editingIndexId = null;
+    manualEntryMode = true;
+    document.getElementById('captureTitle').textContent = 'Add Index Nest';
+    document.getElementById('captureFlag').style.display = 'none';
+    document.getElementById('manualSpeciesWrap').style.display = 'block';
+    document.getElementById('manualNestNumWrap').style.display = 'block';
+    document.getElementById('manualCaptureSpecies').value = '';
+    document.getElementById('manualOtherNameWrap').style.display = 'none';
+    document.getElementById('manualCaptureOtherName').value = '';
+    document.getElementById('manualCaptureNestNum').value = '';
+    document.getElementById('gridInput').value = '';
+    document.getElementById('notesInput').value = '';
+    document.getElementById('latInput').value = '';
+    document.getElementById('lonInput').value = '';
+    document.getElementById('sightingCodeInput').value = '';
+    document.getElementById('belowTideInput').checked = false;
+    document.getElementById('captureDisturbance').value = '';
+    document.getElementById('captureDisturbanceOtherWrap').style.display = 'none';
+    document.getElementById('captureDisturbanceOther').value = '';
+    document.getElementById('captureScreened').value = 'N';
+    document.getElementById('captureWhiteStake').value = 'Y';
+    document.getElementById('captureRelocated').value = 'N';
+    document.getElementById('queueNote').style.display = 'none';
+    const manualStatus = document.getElementById('gpsStatus');
+    manualStatus.textContent = 'Not yet captured — walk to the nest, then tap the button above'; manualStatus.className = 'gps-status';
     document.getElementById('captureOverlay').classList.add('show');
   }
 
@@ -1451,7 +1540,7 @@
   }
 
   async function saveCapture(){
-    if(!pendingCapture && !editingIndexId) return;
+    if(!pendingCapture && !editingIndexId && !manualEntryMode) return;
     const baseCode = document.getElementById('sightingCodeInput').value;
     if(!baseCode){ showToast('Select a sighting code'); return; }
     const belowTide = document.getElementById('belowTideInput').checked;
@@ -1483,11 +1572,28 @@
       return;
     }
 
+    let speciesId, speciesLabel, nestNumber;
+    if(manualEntryMode){
+      const sel = document.getElementById('manualCaptureSpecies').value;
+      if(!sel){ showToast('Select a species'); return; }
+      if(sel==='other'){
+        const name = document.getElementById('manualCaptureOtherName').value.trim();
+        if(!name){ showToast('Enter a species name'); return; }
+        speciesId = null; speciesLabel = name;
+      } else {
+        speciesId = sel;
+        speciesLabel = SPECIES.find(s=>s.id===sel).label;
+      }
+      nestNumber = document.getElementById('manualCaptureNestNum').value.trim() || null;
+    } else {
+      speciesId = pendingCapture.speciesId;
+      speciesLabel = pendingCapture.speciesLabel;
+      nestNumber = pendingCapture.nestNumber;
+    }
+
     const entry = {
       id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
-      speciesId: pendingCapture.speciesId,
-      speciesLabel: pendingCapture.speciesLabel,
-      nestNumber: pendingCapture.nestNumber,
+      speciesId, speciesLabel, nestNumber,
       district: state.meta.district,
       ts: new Date().toISOString(),
       ...fields
@@ -1495,12 +1601,14 @@
     state.indexLog.unshift(entry);
     const ok = await saveState();
     renderLog();
+    const wasManual = manualEntryMode;
     pendingCapture = null;
+    manualEntryMode = false;
     if(!ok){ showToast('Save FAILED — do not close the app, try again'); return; }
-    if(captureQueue.length>0){ showToast('Saved — next index nest'); processQueue(); return; }
+    if(!wasManual && captureQueue.length>0){ showToast('Saved — next index nest'); processQueue(); return; }
     document.getElementById('captureOverlay').classList.remove('show');
     showToast('Index nest saved');
-    if(subsequentQueue.length>0) processSubsequentQueue();
+    if(!wasManual && subsequentQueue.length>0) processSubsequentQueue();
   }
 
   function closeCaptureModal(){
@@ -1511,6 +1619,7 @@
     subsequentQueue = [];
     pendingCapture = null;
     editingIndexId = null;
+    manualEntryMode = false;
     document.getElementById('captureOverlay').classList.remove('show');
     if(wasEditing) return;
     if(skipped>0 || skippedSub>0){
@@ -1548,24 +1657,6 @@
         await saveState(); renderLog();
       });
     });
-  }
-
-  async function copyLog(){
-    if(state.indexLog.length===0){ showToast('Nothing to copy yet'); return; }
-    const text = state.indexLog.map(e=>{
-      const when = new Date(e.ts).toLocaleString();
-      const nestStr = e.nestNumber ? ('Nest #'+e.nestNumber) : 'Rare sighting';
-      return `${e.speciesLabel} — ${nestStr}\n${when}${e.grid?(' · Grid '+e.grid):''}${e.sightingCode?(' · Code '+e.sightingCode):''}\n${e.lat && e.lon ? (e.lat+', '+e.lon) : 'no coordinates'}${e.notes ? ('\nNotes: '+e.notes) : ''}`;
-    }).join('\n\n');
-    try{ await navigator.clipboard.writeText(text); showToast('Copied to clipboard'); }
-    catch(e){
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-      document.body.appendChild(ta); ta.select();
-      try{ document.execCommand('copy'); showToast('Copied to clipboard'); }
-      catch(e2){ showToast('Copy failed — select text manually'); }
-      document.body.removeChild(ta);
-    }
   }
 
   // ---------- subsequent sightings ----------
@@ -2103,6 +2194,13 @@
   document.getElementById('settingsClose').addEventListener('click', closeSettings);
   document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
   document.getElementById('resetAllBtn').addEventListener('click', resetAll);
+  document.getElementById('advancedSettingsToggle').addEventListener('click', ()=>{
+    const content = document.getElementById('advancedSettingsContent');
+    const arrow = document.getElementById('advancedSettingsArrow');
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    arrow.textContent = isHidden ? '▾' : '▸';
+  });
   document.getElementById('exportBackupBtn').addEventListener('click', exportStateBackup);
   document.getElementById('importBackupBtn').addEventListener('click', ()=>document.getElementById('backupImportInput').click());
   document.getElementById('backupImportInput').addEventListener('change', importStateBackup);
@@ -2143,8 +2241,11 @@
   document.getElementById('captureDisturbance').addEventListener('change', (e)=>{
     document.getElementById('captureDisturbanceOtherWrap').style.display = e.target.value==='O' ? 'block' : 'none';
   });
+  document.getElementById('manualCaptureSpecies').addEventListener('change', (e)=>{
+    document.getElementById('manualOtherNameWrap').style.display = e.target.value==='other' ? 'block' : 'none';
+  });
 
-  document.getElementById('copyLogBtn').addEventListener('click', copyLog);
+  document.getElementById('addIndexEntryBtn').addEventListener('click', openManualCapture);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
