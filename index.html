@@ -82,6 +82,9 @@
   .log-head h2{ font-size:15px; margin:0; }
   .copy-btn{ background:none; border:1px solid var(--line); color:var(--ink-muted); font-family:'IBM Plex Mono',monospace; font-size:11px; border-radius:8px; padding:6px 10px; cursor:pointer; }
   .log-empty{ color:var(--ink-muted); font-size:13px; padding:16px; text-align:center; border:1px dashed var(--line); border-radius:var(--radius); }
+  .survey-picker-item{ width:100%; text-align:left; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; font-size:14px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  .survey-picker-item.active{ border-color:var(--gold); color:var(--gold); }
+  .survey-picker-item .spi-sub{ font-size:11px; font-weight:400; color:var(--ink-muted); margin-top:2px; }
   .log-item, .grid-history-item{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:8px; }
   .log-item-top, .gh-top{ display:flex; justify-content:space-between; font-size:13px; font-weight:600; }
   .log-item-meta{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-muted); margin-top:4px; }
@@ -177,9 +180,20 @@
     <span class="eyebrow">Canaveral National Seashore Sea Turtle Nest Survey · Live</span>
     <h1>Nest Counter</h1>
   </div>
-  <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+    <button class="icon-btn" id="surveyPickerBtn" aria-label="Switch survey">📋</button>
+  </div>
 </header>
 <div class="subline" id="metaLine">—</div>
+
+<!-- Survey picker overlay -->
+<div class="overlay" id="surveyPickerOverlay">
+  <div class="sheet">
+    <div class="sheet-head"><h2>Switch Survey</h2><button class="close-x" id="surveyPickerClose">✕</button></div>
+    <div id="surveyPickerList"></div>
+  </div>
+</div>
 
 <div class="daily-totals grid-live-box" style="text-align:left;">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -199,6 +213,7 @@
   ⚠ <b>This browser is blocking storage.</b> Nothing you enter will be saved. This usually means Incognito/Private mode, or a browser setting blocking site data. Use <b>Export to Excel</b> before closing this page either way.
 </div>
 
+<div id="turtleModeContent">
 <div class="grid" id="speciesGrid"></div>
 
 <div id="dailyTotals" class="daily-totals">Today: no activity logged yet</div>
@@ -229,6 +244,52 @@
 <div class="new-day-hint">Clears today's Grid History, Index Log, and Subsequent Sightings — running counts and next-index numbers carry forward untouched</div>
 
 <button class="fab" id="addGridBtn">+ Add Grid Tally</button>
+</div>
+
+<div id="nestInventoryModeContent" style="display:none;">
+  <div class="log-section">
+    <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
+    <div id="nestInventoryList"></div>
+  </div>
+  <button class="export-btn" id="exportNestInventoryBtn">⬇ Export to Excel</button>
+  <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
+  <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
+</div>
+
+<div id="tigerBeetleModeContent" style="display:none;">
+  <div class="daily-totals" style="text-align:left;" id="beetleActiveBox">
+    <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:6px;" id="beetleStatusText">No transect in progress</div>
+    <div class="field" style="margin-bottom:8px;"><label>Grid number</label>
+      <div class="stepper" style="width:100%;">
+        <button type="button" class="step-btn" id="beetleGridMinus">−</button>
+        <input type="number" id="beetleGridNumber" inputmode="numeric" style="flex:1; text-align:center; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:11px 8px; font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600;">
+        <button type="button" class="step-btn" id="beetleGridPlus">+</button>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:8px;"><label>Direction</label>
+      <select id="beetleDirection"><option value="S">S</option><option value="N">N</option></select>
+    </div>
+    <button type="button" class="btn btn-primary" id="beetleStartBtn" style="width:100%;">▶ Start Transect</button>
+    <div id="beetleActiveTally" style="display:none;">
+      <div class="tally-fields" style="margin-top:14px;">
+        <div class="tally-field"><label>Individuals</label>
+          <div class="stepper"><button type="button" class="step-btn" data-step="-1">−</button><div class="step-value" id="beetleIndivValue">0</div><button type="button" class="step-btn" data-step="1">+</button></div>
+        </div>
+        <div class="tally-field"><label>Copulating Pairs</label>
+          <div class="stepper"><button type="button" class="step-btn" data-step="-1">−</button><div class="step-value" id="beetlePairsValue">0</div><button type="button" class="step-btn" data-step="1">+</button></div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" id="beetleEndBtn" style="width:100%; margin-top:14px;">■ End Transect</button>
+    </div>
+  </div>
+  <div class="log-section">
+    <div class="log-head"><h2>Transect Log</h2></div>
+    <div id="beetleLogList"></div>
+  </div>
+  <button class="export-btn" id="exportBeetleBtn">⬇ Export to Excel</button>
+  <button class="new-day-btn" id="clearBeetleBtn">🗓 Clear Day</button>
+  <div class="new-day-hint">Clears today's Transect Log entries on this device</div>
+</div>
 
 <!-- Grid Tally modal -->
 <div class="overlay" id="gridTallyOverlay">
@@ -439,6 +500,40 @@
   </div>
 </div>
 
+<!-- Nest Inventory modal -->
+<div class="overlay" id="nestInventoryOverlay">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="nestInventoryTitle">Add Nest Inventory</h2><button class="close-x" id="nestInventoryClose">✕</button></div>
+    <div class="field"><label>Grid</label><input type="text" id="niGrid" placeholder="e.g. 14"></div>
+    <div class="field"><label>Species</label>
+      <select id="niSpecies">
+        <option value="" disabled selected>Select species…</option>
+        <option value="loggerhead">Loggerhead</option>
+        <option value="green">Green</option>
+        <option value="leatherback">Leatherback</option>
+        <option value="kemps">Kemp's Ridley</option>
+        <option value="other">Other (specify)</option>
+      </select>
+    </div>
+    <div class="field" id="niOtherNameWrap" style="display:none;"><label>Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
+    <div class="field"><label>Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
+    <div class="field"><label>Hatchling Live</label><input type="number" id="niHatchLive" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Hatchling Dead</label><input type="number" id="niHatchDead" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Empty Shells</label><input type="number" id="niEmptyShells" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Pipped Dead</label><input type="number" id="niPippedDead" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Pipped Live</label><input type="number" id="niPippedLive" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Whole Eggs</label><input type="number" id="niWholeEggs" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Number Physically Damaged</label><input type="number" id="niDamaged" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label>Total Clutch</label><div class="mono" id="niTotalClutch" style="font-size:20px; font-weight:700; padding:6px 0; color:var(--gold);">0</div></div>
+    <div class="field"><label>Comment</label><textarea id="niComment"></textarea></div>
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="niCancel">Cancel</button>
+      <button class="btn btn-primary" id="niSave">Save</button>
+    </div>
+    <button class="reset-btn" id="niDelete" style="display:none; margin-top:10px;">Delete this entry</button>
+  </div>
+</div>
+
 <!-- Settings overlay -->
 <div class="overlay" id="settingsOverlay">
   <div class="sheet">
@@ -478,6 +573,10 @@
     <div id="advancedSettingsContent" style="display:none;">
       <div class="settings-group" style="margin-top:14px;">
         <h3>Grid map</h3>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">When on, opening Add Grid Tally auto-fills the grid you were previously in (based on live GPS), and Subsequent Sighting auto-fills the grid you're currently in. Requires grid tracking (below) to be running. Off by default — always double-check before saving.</div>
+        <div class="field"><label>Auto-fill grid from GPS</label>
+          <select id="editGridAutoFill"><option value="off">Off (default)</option><option value="on">On</option></select>
+        </div>
         <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
           <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -546,7 +645,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'] },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -554,7 +653,9 @@
       grids: [],
       indexLog: [],
       subsequentSightings: [],
-      gridMapOverride: null
+      gridMapOverride: null,
+      nestInventory: [],
+      tigerBeetle: []
     };
   }
 
@@ -576,6 +677,8 @@
     if(!meta.district) meta.district = 'apollo';
     if(!meta.observerList || !Array.isArray(meta.observerList)) meta.observerList = ['Benson'];
     if(meta.observer && !meta.observerList.includes(meta.observer)) meta.observerList.push(meta.observer);
+    if(!meta.currentMode) meta.currentMode = 'turtle';
+    if(meta.gridAutoFill === undefined || meta.gridAutoFill === null) meta.gridAutoFill = false;
 
     let species = loaded.species || base.species;
     if(!species.apollo && !species.playalinda){
@@ -595,12 +698,47 @@
       grids: loaded.grids || [],
       indexLog: loaded.indexLog || [],
       subsequentSightings: loaded.subsequentSightings || [],
-      gridMapOverride: loaded.gridMapOverride || null
+      gridMapOverride: loaded.gridMapOverride || null,
+      nestInventory: loaded.nestInventory || [],
+      tigerBeetle: loaded.tigerBeetle || []
     };
   }
 
   function currentSpecies(){ return state.species[state.meta.district]; }
   function applyTheme(){ document.body.classList.toggle('light-mode', !!state.meta.lightMode); }
+
+  // ---------- survey mode switching ----------
+  const SURVEY_MODES = [
+    { id:'turtle', label:'Sea Turtle Nest Survey', sub:'Grid tally, index nests, subsequent sightings' },
+    { id:'nestInventory', label:'Nest Inventory', sub:'Excavated clutch counts' },
+    { id:'tigerBeetle', label:'Tiger Beetle Survey', sub:'Transect tallies' }
+  ];
+
+  function applyMode(){
+    document.getElementById('turtleModeContent').style.display = state.meta.currentMode==='turtle' ? 'block' : 'none';
+    document.getElementById('nestInventoryModeContent').style.display = state.meta.currentMode==='nestInventory' ? 'block' : 'none';
+    document.getElementById('tigerBeetleModeContent').style.display = state.meta.currentMode==='tigerBeetle' ? 'block' : 'none';
+    document.getElementById('addGridBtn').style.display = state.meta.currentMode==='turtle' ? 'block' : 'none';
+  }
+
+  function renderSurveyPicker(){
+    const wrap = document.getElementById('surveyPickerList');
+    wrap.innerHTML = SURVEY_MODES.map(m=>`
+      <button type="button" class="survey-picker-item ${state.meta.currentMode===m.id?'active':''}" data-mode="${m.id}">
+        <div><div>${escapeHtml(m.label)}</div><div class="spi-sub">${escapeHtml(m.sub)}</div></div>
+        ${state.meta.currentMode===m.id ? '✓' : ''}
+      </button>`).join('');
+    wrap.querySelectorAll('.survey-picker-item').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        state.meta.currentMode = btn.dataset.mode;
+        await saveState();
+        applyMode();
+        renderSurveyPicker();
+        document.getElementById('surveyPickerOverlay').classList.remove('show');
+        showToast(`Switched to ${SURVEY_MODES.find(m=>m.id===btn.dataset.mode).label}`);
+      });
+    });
+  }
 
   function populateObserverDropdown(){
     const sel = document.getElementById('editObserver');
@@ -712,6 +850,7 @@
       const card = document.createElement('div');
       card.className = 'card';
       card.id = 'card-'+meta.id;
+      card.style.borderColor = meta.accent;
 
       let intervalHtml = '', progressHtml = '';
       if(meta.hasInterval){
@@ -803,7 +942,12 @@
   }
 
   function openGridTally(){
-    document.getElementById('gtGridNumber').value = suggestNextGrid();
+    let gridValue = suggestNextGrid();
+    if(state.meta.gridAutoFill){
+      const prior = getPriorDetectedGrid();
+      if(prior && prior.district === state.meta.district) gridValue = prior.gridNumber;
+    }
+    document.getElementById('gtGridNumber').value = gridValue;
     const speciesBlocksEl = document.getElementById('gtSpeciesBlocks');
     speciesBlocksEl.innerHTML = FIXED_TALLY_SPECIES.map(meta => `
       <div class="tally-species-block" style="border-color:${meta.accent};">
@@ -1243,11 +1387,25 @@
     return best;
   }
 
+  // Tracks the last 2 DISTINCT grids detected live, so "prior grid" (what you were
+  // just in) and "current grid" (where you are now) can be told apart for GPS auto-fill.
+  let detectedGridHistory = []; // most recent first
+  function recordDetectedGrid(result){
+    if(!result) return;
+    const last = detectedGridHistory[0];
+    if(last && last.district===result.district && last.gridNumber===result.gridNumber) return;
+    detectedGridHistory.unshift({district: result.district, gridNumber: result.gridNumber});
+    if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
+  }
+  function getCurrentDetectedGrid(){ return detectedGridHistory[0] || null; }
+  function getPriorDetectedGrid(){ return detectedGridHistory[1] || detectedGridHistory[0] || null; }
+
   function renderGridLiveResult(result, accuracy, errorText){
     let text;
     if(errorText) text = errorText;
     else if(!result) text = 'No fix yet…';
     else{
+      recordDetectedGrid(result);
       const districtLabel = result.district==='playalinda' ? 'Playalinda' : 'Apollo';
       const accText = accuracy ? ` (±${Math.round(accuracy)}m GPS)` : '';
       text = `Likely Grid ${result.gridNumber} — ${districtLabel}${accText}`;
@@ -1266,6 +1424,7 @@
     }
     if(!gridMapSegments){ showToast('Load a grid map first'); return; }
     if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
+    detectedGridHistory = [];
     setTextAll(GRID_RESULT_IDS, 'Locating…');
     gridWatchId = navigator.geolocation.watchPosition(
       (pos)=>{ renderGridLiveResult(findNearestGridSegment(pos.coords.latitude, pos.coords.longitude), pos.coords.accuracy); },
@@ -1659,13 +1818,312 @@
     });
   }
 
+  // ---------- nest inventory ----------
+  let editingNestInventoryId = null;
+
+  function updateNiTotalClutch(){
+    const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
+    const total = v('niHatchLive')+v('niHatchDead')+v('niEmptyShells')+v('niPippedDead')+v('niPippedLive')+v('niWholeEggs');
+    document.getElementById('niTotalClutch').textContent = total;
+    return total;
+  }
+
+  function openNestInventory(){
+    editingNestInventoryId = null;
+    document.getElementById('nestInventoryTitle').textContent = 'Add Nest Inventory';
+    document.getElementById('niGrid').value = '';
+    document.getElementById('niSpecies').value = '';
+    document.getElementById('niOtherNameWrap').style.display = 'none';
+    document.getElementById('niOtherName').value = '';
+    document.getElementById('niNestNumber').value = '';
+    ['niHatchLive','niHatchDead','niEmptyShells','niPippedDead','niPippedLive','niWholeEggs','niDamaged'].forEach(id=>{
+      document.getElementById(id).value = 0;
+    });
+    document.getElementById('niComment').value = '';
+    updateNiTotalClutch();
+    document.getElementById('niDelete').style.display = 'none';
+    document.getElementById('nestInventoryOverlay').classList.add('show');
+  }
+
+  function editNestInventory(id){
+    const entry = state.nestInventory.find(e=>e.id===id);
+    if(!entry) return;
+    editingNestInventoryId = id;
+    document.getElementById('nestInventoryTitle').textContent = 'Edit Nest Inventory';
+    document.getElementById('niGrid').value = entry.grid || '';
+    if(entry.speciesId){
+      document.getElementById('niSpecies').value = entry.speciesId;
+      document.getElementById('niOtherNameWrap').style.display = 'none';
+      document.getElementById('niOtherName').value = '';
+    } else {
+      document.getElementById('niSpecies').value = 'other';
+      document.getElementById('niOtherNameWrap').style.display = 'block';
+      document.getElementById('niOtherName').value = entry.speciesLabel || '';
+    }
+    document.getElementById('niNestNumber').value = entry.nestNumber || '';
+    document.getElementById('niHatchLive').value = entry.hatchLive || 0;
+    document.getElementById('niHatchDead').value = entry.hatchDead || 0;
+    document.getElementById('niEmptyShells').value = entry.emptyShells || 0;
+    document.getElementById('niPippedDead').value = entry.pippedDead || 0;
+    document.getElementById('niPippedLive').value = entry.pippedLive || 0;
+    document.getElementById('niWholeEggs').value = entry.wholeEggs || 0;
+    document.getElementById('niDamaged').value = entry.damaged || 0;
+    document.getElementById('niComment').value = entry.comment || '';
+    updateNiTotalClutch();
+    document.getElementById('niDelete').style.display = 'block';
+    document.getElementById('nestInventoryOverlay').classList.add('show');
+  }
+
+  function closeNestInventoryModal(){
+    document.getElementById('nestInventoryOverlay').classList.remove('show');
+    editingNestInventoryId = null;
+  }
+
+  async function saveNestInventory(){
+    const grid = document.getElementById('niGrid').value.trim();
+    const speciesSel = document.getElementById('niSpecies').value;
+    const nestNumber = document.getElementById('niNestNumber').value.trim();
+    if(!grid){ showToast('Enter a grid number'); return; }
+    if(!speciesSel){ showToast('Select a species'); return; }
+    if(!nestNumber){ showToast('Enter a nest number'); return; }
+    let speciesId, speciesLabel;
+    if(speciesSel==='other'){
+      const name = document.getElementById('niOtherName').value.trim();
+      if(!name){ showToast('Enter a species name'); return; }
+      speciesId = null; speciesLabel = name;
+    } else {
+      speciesId = speciesSel;
+      speciesLabel = SPECIES.find(s=>s.id===speciesSel).label;
+    }
+    const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
+    const fields = {
+      grid, speciesId, speciesLabel, nestNumber,
+      hatchLive: v('niHatchLive'), hatchDead: v('niHatchDead'),
+      emptyShells: v('niEmptyShells'), pippedDead: v('niPippedDead'), pippedLive: v('niPippedLive'),
+      wholeEggs: v('niWholeEggs'), damaged: v('niDamaged'),
+      comment: document.getElementById('niComment').value.trim(),
+      district: state.meta.district
+    };
+    if(editingNestInventoryId){
+      const existing = state.nestInventory.find(e=>e.id===editingNestInventoryId);
+      if(existing) Object.assign(existing, fields);
+    } else {
+      state.nestInventory.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7), ts: new Date().toISOString(), ...fields });
+    }
+    const ok = await saveState();
+    renderNestInventory();
+    closeNestInventoryModal();
+    if(!ok){ showToast('Save FAILED — try again'); return; }
+    showToast('Nest inventory saved');
+  }
+
+  async function deleteNestInventory(){
+    if(!editingNestInventoryId) return;
+    if(!confirm('Delete this nest inventory entry?')) return;
+    state.nestInventory = state.nestInventory.filter(e=>e.id!==editingNestInventoryId);
+    await saveState();
+    renderNestInventory();
+    closeNestInventoryModal();
+    showToast('Entry deleted');
+  }
+
+  function renderNestInventory(){
+    const wrap = document.getElementById('nestInventoryList');
+    if(state.nestInventory.length===0){ wrap.innerHTML = '<div class="log-empty">No nest inventory entries yet.</div>'; return; }
+    wrap.innerHTML = state.nestInventory.map(e=>{
+      const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0);
+      return `<div class="log-item">
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">Grid ${escapeHtml(String(e.grid))}</span></div>
+        <div class="log-item-meta">Total clutch: ${total} · Damaged: ${e.damaged||0}</div>
+        ${e.comment ? `<div class="log-item-notes">${escapeHtml(e.comment)}</div>` : ''}
+        <button class="log-item-edit" data-id="${e.id}">Edit</button>
+        <button class="log-item-del" data-id="${e.id}">Remove</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
+      b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
+    });
+    wrap.querySelectorAll('.log-item-del').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        state.nestInventory = state.nestInventory.filter(x=>x.id!==b.dataset.id);
+        await saveState(); renderNestInventory();
+      });
+    });
+  }
+
+  function exportNestInventory(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return; }
+    const wb = XLSX.utils.book_new();
+    const observer = state.meta.observer || '';
+    const header = ['Date','Observer','District','Grid','Species','Nest #','Hatchling Live','Hatchling Dead','Empty Shells','Pipped Dead','Pipped Live','Whole Eggs','Number Physically Damaged','Total Clutch','Comment'];
+    const rows = state.nestInventory.slice().reverse().map(e=>{
+      const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0);
+      const districtLabel = DISTRICT_LABEL[e.district||state.meta.district] || 'Apollo';
+      return [
+        state.meta.date||'', observer, districtLabel, toGridNumber(e.grid), e.speciesLabel||'', e.nestNumber||'',
+        e.hatchLive||0, e.hatchDead||0, e.emptyShells||0, e.pippedDead||0, e.pippedLive||0, e.wholeEggs||0,
+        e.damaged||0, total, e.comment||''
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Nest Inventory');
+    const filename = `${DISTRICT_LABEL[state.meta.district]||'Apollo'}NestInventory${formatFilenameDate(state.meta.date||todayStr())}.xlsx`;
+    try{ XLSX.writeFile(wb, filename); showToast('Excel file downloading…'); }
+    catch(e){ showToast('Export failed — try again'); }
+  }
+
+  async function clearNestInventory(){
+    if(!confirm("Clear today's Nest Inventory entries? This cannot be undone.")) return;
+    state.nestInventory = [];
+    const ok = await saveState();
+    renderNestInventory();
+    if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
+    showToast('Nest Inventory cleared');
+  }
+
+  // ---------- tiger beetle survey ----------
+  let activeBeetleTransect = null;
+
+  function attemptBeetleGeo(callback){
+    if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos)=> callback(pos.coords.latitude, pos.coords.longitude),
+      (err)=> showToast('GPS error — check permissions, try again'),
+      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+    );
+  }
+
+  function startBeetleTransect(){
+    const grid = document.getElementById('beetleGridNumber').value.trim();
+    if(!grid){ showToast('Enter a grid number'); return; }
+    const direction = document.getElementById('beetleDirection').value;
+    showToast('Capturing start location…');
+    attemptBeetleGeo((lat, lon)=>{
+      activeBeetleTransect = {
+        grid, direction, startLat: lat, startLon: lon, startTs: new Date().toISOString(),
+        individuals: 0, copulatingPairs: 0
+      };
+      document.getElementById('beetleIndivValue').textContent = '0';
+      document.getElementById('beetlePairsValue').textContent = '0';
+      document.getElementById('beetleActiveTally').style.display = 'block';
+      document.getElementById('beetleStartBtn').style.display = 'none';
+      document.getElementById('beetleGridNumber').disabled = true;
+      document.getElementById('beetleGridMinus').disabled = true;
+      document.getElementById('beetleGridPlus').disabled = true;
+      document.getElementById('beetleDirection').disabled = true;
+      document.getElementById('beetleStatusText').textContent = `Transect in progress — Grid ${grid} ${direction}`;
+      showToast('Transect started');
+    });
+  }
+
+  function endBeetleTransect(){
+    if(!activeBeetleTransect) return;
+    showToast('Capturing end location…');
+    attemptBeetleGeo(async (lat, lon)=>{
+      const entry = {
+        id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+        grid: activeBeetleTransect.grid,
+        direction: activeBeetleTransect.direction,
+        startLat: activeBeetleTransect.startLat, startLon: activeBeetleTransect.startLon,
+        stopLat: lat, stopLon: lon,
+        individuals: activeBeetleTransect.individuals,
+        copulatingPairs: activeBeetleTransect.copulatingPairs,
+        notes: '',
+        startTs: activeBeetleTransect.startTs,
+        district: state.meta.district
+      };
+      state.tigerBeetle.unshift(entry);
+      activeBeetleTransect = null;
+      const ok = await saveState();
+      renderBeetleLog();
+      document.getElementById('beetleActiveTally').style.display = 'none';
+      document.getElementById('beetleStartBtn').style.display = 'block';
+      document.getElementById('beetleGridNumber').disabled = false;
+      document.getElementById('beetleGridMinus').disabled = false;
+      document.getElementById('beetleGridPlus').disabled = false;
+      document.getElementById('beetleDirection').disabled = false;
+      document.getElementById('beetleStatusText').textContent = 'No transect in progress';
+      if(!ok){ showToast('Save FAILED — try again'); return; }
+      showToast('Transect saved');
+    });
+  }
+
+  function renderBeetleLog(){
+    const wrap = document.getElementById('beetleLogList');
+    if(state.tigerBeetle.length===0){ wrap.innerHTML = '<div class="log-empty">No transects logged yet.</div>'; return; }
+    wrap.innerHTML = state.tigerBeetle.map(e=>{
+      const when = new Date(e.startTs).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      return `<div class="log-item">
+        <div class="log-item-top"><span>Grid ${escapeHtml(String(e.grid))} ${escapeHtml(e.direction)}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
+        <div class="log-item-meta">${e.individuals} individual(s) · ${e.copulatingPairs} pair(s)</div>
+        ${e.notes ? `<div class="log-item-notes">${escapeHtml(e.notes)}</div>` : ''}
+        <button class="log-item-edit" data-id="${e.id}">Edit comment</button>
+        <button class="log-item-del" data-id="${e.id}">Remove</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        const entry = state.tigerBeetle.find(x=>x.id===b.dataset.id);
+        if(!entry) return;
+        const input = prompt('Comment for this transect:', entry.notes||'');
+        if(input===null) return;
+        entry.notes = input.trim();
+        await saveState();
+        renderBeetleLog();
+      });
+    });
+    wrap.querySelectorAll('.log-item-del').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        state.tigerBeetle = state.tigerBeetle.filter(x=>x.id!==b.dataset.id);
+        await saveState(); renderBeetleLog();
+      });
+    });
+  }
+
+  function exportBeetle(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    if(state.tigerBeetle.length===0){ showToast('No transects to export'); return; }
+    const wb = XLSX.utils.book_new();
+    const observer = state.meta.observer || '';
+    const header = ['Date','Observer','Grid Number','N','Start point Lat','Start point Lon','Stop point Lat','Stop point Lon','Number of individuals','Number copulating pairs','Notes','Presence'];
+    const rows = state.tigerBeetle.slice().reverse().map(e=>{
+      const d = excelDate(e.startTs);
+      return [
+        d, observer, toGridNumber(e.grid), e.direction,
+        e.startLat, e.startLon, e.stopLat, e.stopLon,
+        e.individuals||0, e.copulatingPairs||0, e.notes||'',
+        (e.individuals||0) > 0 ? 1 : 0
+      ];
+    });
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Tiger Beetle Survey Data');
+    const filename = `TigerBeetle${formatFilenameDate(state.meta.date||todayStr())}.xlsx`;
+    try{ XLSX.writeFile(wb, filename); showToast('Excel file downloading…'); }
+    catch(e){ showToast('Export failed — try again'); }
+  }
+
+  async function clearBeetle(){
+    if(!confirm("Clear today's Transect Log entries? This cannot be undone.")) return;
+    state.tigerBeetle = [];
+    const ok = await saveState();
+    renderBeetleLog();
+    if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
+    showToast('Transect Log cleared');
+  }
+
   // ---------- subsequent sightings ----------
   function openSubsequent(prefill){
     document.getElementById('subSpecies').value = (prefill && prefill.speciesId) ? prefill.speciesId : '';
     document.getElementById('subOtherNameWrap').style.display='none';
     document.getElementById('subOtherName').value='';
     document.getElementById('subNestNumber').value = prefill ? (prefill.nestNumber ?? '') : '';
-    document.getElementById('subGrid').value = prefill ? (prefill.grid ?? '') : '';
+    let gridVal = prefill ? (prefill.grid ?? '') : '';
+    if(!prefill && state.meta.gridAutoFill){
+      const cur = getCurrentDetectedGrid();
+      if(cur && cur.district === state.meta.district) gridVal = cur.gridNumber;
+    }
+    document.getElementById('subGrid').value = gridVal;
     document.getElementById('subSightingCode').value='';
     document.getElementById('subDisturbanceCode').value='';
     document.getElementById('subDisturbanceOtherWrap').style.display='none';
@@ -1839,6 +2297,7 @@
     document.getElementById('editRunTime').value = state.meta.runTime || 'Day';
     document.getElementById('editDailyComment').value = state.meta.dailyComment || '';
     document.getElementById('editLightMode').value = state.meta.lightMode ? 'light' : 'dark';
+    document.getElementById('editGridAutoFill').value = state.meta.gridAutoFill ? 'on' : 'off';
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
   }
@@ -1853,6 +2312,7 @@
     state.meta.runTime = document.getElementById('editRunTime').value;
     state.meta.dailyComment = document.getElementById('editDailyComment').value.trim();
     state.meta.lightMode = document.getElementById('editLightMode').value === 'light';
+    state.meta.gridAutoFill = document.getElementById('editGridAutoFill').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
@@ -1876,7 +2336,9 @@
     await saveState();
     applyTheme();
     initGridMap();
+    applyMode();
     renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals();
+    renderNestInventory(); renderBeetleLog();
     closeSettings();
     showToast('Reset complete');
   }
@@ -1914,7 +2376,9 @@
       const ok = await saveState();
       applyTheme();
       initGridMap();
+      applyMode();
       renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals();
+      renderNestInventory(); renderBeetleLog();
       if(!ok){ showToast('Imported locally — save FAILED, check storage'); return; }
       showToast('Backup imported');
     }catch(err){
@@ -2192,6 +2656,13 @@
   // ---------- wire up ----------
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('settingsClose').addEventListener('click', closeSettings);
+  document.getElementById('surveyPickerBtn').addEventListener('click', ()=>{
+    renderSurveyPicker();
+    document.getElementById('surveyPickerOverlay').classList.add('show');
+  });
+  document.getElementById('surveyPickerClose').addEventListener('click', ()=>{
+    document.getElementById('surveyPickerOverlay').classList.remove('show');
+  });
   document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
   document.getElementById('resetAllBtn').addEventListener('click', resetAll);
   document.getElementById('advancedSettingsToggle').addEventListener('click', ()=>{
@@ -2246,6 +2717,50 @@
   });
 
   document.getElementById('addIndexEntryBtn').addEventListener('click', openManualCapture);
+
+  // Nest Inventory wiring
+  document.getElementById('addNestInventoryBtn').addEventListener('click', openNestInventory);
+  document.getElementById('nestInventoryClose').addEventListener('click', closeNestInventoryModal);
+  document.getElementById('niCancel').addEventListener('click', closeNestInventoryModal);
+  document.getElementById('niSave').addEventListener('click', saveNestInventory);
+  document.getElementById('niDelete').addEventListener('click', deleteNestInventory);
+  document.getElementById('niSpecies').addEventListener('change', (e)=>{
+    document.getElementById('niOtherNameWrap').style.display = e.target.value==='other' ? 'block' : 'none';
+  });
+  ['niHatchLive','niHatchDead','niEmptyShells','niPippedDead','niPippedLive','niWholeEggs'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', updateNiTotalClutch);
+  });
+  document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
+  document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
+
+  // Tiger Beetle wiring
+  document.getElementById('beetleGridMinus').addEventListener('click', ()=>{
+    const el = document.getElementById('beetleGridNumber');
+    el.value = Math.max(0, (parseInt(el.value,10)||0) - 1);
+  });
+  document.getElementById('beetleGridPlus').addEventListener('click', ()=>{
+    const el = document.getElementById('beetleGridNumber');
+    el.value = (parseInt(el.value,10)||0) + 1;
+  });
+  document.getElementById('beetleStartBtn').addEventListener('click', startBeetleTransect);
+  document.getElementById('beetleEndBtn').addEventListener('click', endBeetleTransect);
+  document.querySelectorAll('#beetleActiveTally .step-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!activeBeetleTransect) return;
+      const wrap = btn.closest('.tally-field');
+      const valueEl = wrap.querySelector('.step-value');
+      const delta = parseInt(btn.dataset.step, 10);
+      if(valueEl.id==='beetleIndivValue'){
+        activeBeetleTransect.individuals = Math.max(0, activeBeetleTransect.individuals + delta);
+        valueEl.textContent = activeBeetleTransect.individuals;
+      } else {
+        activeBeetleTransect.copulatingPairs = Math.max(0, activeBeetleTransect.copulatingPairs + delta);
+        valueEl.textContent = activeBeetleTransect.copulatingPairs;
+      }
+    });
+  });
+  document.getElementById('exportBeetleBtn').addEventListener('click', exportBeetle);
+  document.getElementById('clearBeetleBtn').addEventListener('click', clearBeetle);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
@@ -2276,6 +2791,9 @@
     renderDailyTotals();
     renderLog();
     renderSubsequent();
+    renderNestInventory();
+    renderBeetleLog();
+    applyMode();
   })();
 
 })();
