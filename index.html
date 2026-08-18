@@ -152,6 +152,18 @@
   .step-value.type-nest{ background:#6EE080; border-color:#6EE080; color:#0A2810; }
   .step-value.type-pred{ background:#F26B5E; border-color:#F26B5E; color:#2A0805; }
 
+  /* Tiger Beetle tally — only 2 fields, not 5, so no need to cram them small like
+     the turtle grid tally above. Sized generously, and deliberately NOT using the
+     .tally-fields/.step-btn classes so the phone-width media query for that
+     5-across layout doesn't shrink these too. */
+  .beetle-tally-fields{ display:flex; gap:16px; }
+  .beetle-tally-field{ flex:1; display:flex; flex-direction:column; align-items:center; }
+  .beetle-tally-field label{ font-size:13px; color:var(--ink); margin-bottom:8px; font-weight:600; }
+  .beetle-stepper{ display:flex; align-items:center; gap:10px; width:100%; }
+  .beetle-step-btn{ flex:1; height:64px; border-radius:12px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-size:30px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; line-height:1; }
+  .beetle-step-btn:active{ background:var(--gold); color:#2A1D05; }
+  .beetle-step-value{ min-width:64px; flex-shrink:0; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 8px; font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700; color:var(--ink); }
+
   /* Phone-width screens: not enough horizontal room for 5 side-by-side horizontal steppers
      without the +/- buttons cramping together. Stack each tally stepper vertically instead:
      + on top, value in the middle, - on the bottom. Scoped to .tally-fields only so the
@@ -271,12 +283,12 @@
     </div>
     <button type="button" class="btn btn-primary" id="beetleStartBtn" style="width:100%;">▶ Start Transect</button>
     <div id="beetleActiveTally" style="display:none;">
-      <div class="tally-fields" style="margin-top:14px;">
-        <div class="tally-field"><label>Individuals</label>
-          <div class="stepper"><button type="button" class="step-btn" data-step="-1">−</button><div class="step-value" id="beetleIndivValue">0</div><button type="button" class="step-btn" data-step="1">+</button></div>
+      <div class="beetle-tally-fields" style="margin-top:14px;">
+        <div class="beetle-tally-field"><label>Individuals</label>
+          <div class="beetle-stepper"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetleIndivValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
         </div>
-        <div class="tally-field"><label>Copulating Pairs</label>
-          <div class="stepper"><button type="button" class="step-btn" data-step="-1">−</button><div class="step-value" id="beetlePairsValue">0</div><button type="button" class="step-btn" data-step="1">+</button></div>
+        <div class="beetle-tally-field"><label>Copulating Pairs</label>
+          <div class="beetle-stepper"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetlePairsValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
         </div>
       </div>
       <button type="button" class="btn btn-primary" id="beetleEndBtn" style="width:100%; margin-top:14px;">■ End Transect</button>
@@ -2772,11 +2784,11 @@
   });
   document.getElementById('beetleStartBtn').addEventListener('click', startBeetleTransect);
   document.getElementById('beetleEndBtn').addEventListener('click', endBeetleTransect);
-  document.querySelectorAll('#beetleActiveTally .step-btn').forEach(btn=>{
+  document.querySelectorAll('#beetleActiveTally .beetle-step-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(!activeBeetleTransect) return;
-      const wrap = btn.closest('.tally-field');
-      const valueEl = wrap.querySelector('.step-value');
+      const wrap = btn.closest('.beetle-tally-field');
+      const valueEl = wrap.querySelector('.beetle-step-value');
       const delta = parseInt(btn.dataset.step, 10);
       if(valueEl.id==='beetleIndivValue'){
         activeBeetleTransect.individuals = Math.max(0, activeBeetleTransect.individuals + delta);
