@@ -94,7 +94,10 @@
   .gh-edit{ background:none; border:none; color:var(--gold); cursor:pointer; font-size:12px; text-decoration:underline; margin-top:8px; padding:0;}
   .gh-summary{ font-size:12px; color:var(--ink-muted); margin-top:5px; line-height:1.5; font-family:'IBM Plex Mono',monospace; }
 
-  .export-btn{ width:100%; background:var(--excel-green); border:1px solid var(--excel-green); color:#FFFFFF; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; margin-top:18px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .export-btn{ background:var(--excel-green); border:1px solid var(--excel-green); color:#FFFFFF; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .export-row{ display:flex; gap:8px; margin-top:18px; }
+  .export-row .export-btn{ flex:2; margin-top:0; }
+  .share-btn{ flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:13px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
   .new-day-btn{ width:100%; background:transparent; border:1px solid var(--rare); color:var(--rare); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; cursor:pointer; margin-top:10px; }
   .new-day-hint{ font-size:11px; color:var(--ink-muted); text-align:center; margin-top:6px; line-height:1.4; padding:0 8px; }
   .fab{ position:fixed; left:14px; right:14px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index:40; background:var(--gold); color:#2A1D05; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
@@ -251,7 +254,10 @@
   <div id="subsequentList"></div>
 </div>
 
-<button class="export-btn" id="exportBtn">⬇ Export to Excel</button>
+<div class="export-row">
+  <button class="export-btn" id="exportBtn">⬇ Export</button>
+  <button class="share-btn" id="shareBtn">📤 Share</button>
+</div>
 <button class="new-day-btn" id="newDayBtn">🗓 Start New Day</button>
 <div class="new-day-hint">Clears today's Grid History, Index Log, and Subsequent Sightings — running counts and next-index numbers carry forward untouched</div>
 
@@ -263,7 +269,10 @@
     <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
     <div id="nestInventoryList"></div>
   </div>
-  <button class="export-btn" id="exportNestInventoryBtn">⬇ Export to Excel</button>
+  <div class="export-row">
+    <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
+    <button class="share-btn" id="shareNestInventoryBtn">📤 Share</button>
+  </div>
   <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
 </div>
@@ -298,7 +307,10 @@
     <div class="log-head"><h2>Transect Log</h2></div>
     <div id="beetleLogList"></div>
   </div>
-  <button class="export-btn" id="exportBeetleBtn">⬇ Export to Excel</button>
+  <div class="export-row">
+    <button class="export-btn" id="exportBeetleBtn">⬇ Export</button>
+    <button class="share-btn" id="shareBeetleBtn">📤 Share</button>
+  </div>
   <button class="new-day-btn" id="clearBeetleBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Transect Log entries on this device</div>
 </div>
@@ -1965,9 +1977,8 @@
     });
   }
 
-  function exportNestInventory(){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
-    if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return; }
+  function buildNestInventoryWorkbook(){
+    if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return null; }
     const wb = XLSX.utils.book_new();
     const observer = state.meta.observer || '';
     // Column order mirrors the paper Nest Inventory form. "Laid" and "Hatched" (under
@@ -1988,8 +1999,21 @@
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, 'Nest Inventory');
     const filename = `${DISTRICT_LABEL[state.meta.district]||'Apollo'}NestInventory${formatFilenameDate(state.meta.date||todayStr())}.xlsx`;
-    try{ XLSX.writeFile(wb, filename); showToast('Excel file downloading…'); }
+    return {wb, filename};
+  }
+
+  function exportNestInventory(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    const built = buildNestInventoryWorkbook();
+    if(!built) return;
+    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
+  }
+
+  function shareNestInventory(){
+    const built = buildNestInventoryWorkbook();
+    if(!built) return;
+    shareWorkbook(built.wb, built.filename);
   }
 
   async function clearNestInventory(){
@@ -2121,9 +2145,8 @@
     });
   }
 
-  function exportBeetle(){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
-    if(state.tigerBeetle.length===0){ showToast('No transects to export'); return; }
+  function buildBeetleWorkbook(){
+    if(state.tigerBeetle.length===0){ showToast('No transects to export'); return null; }
     const wb = XLSX.utils.book_new();
     const observer = state.meta.observer || '';
     const header = ['Date','Observer','Grid Number','N','Start point Lat','Start point Lon','Stop point Lat','Stop point Lon','Number of individuals','Number copulating pairs','Notes','Presence'];
@@ -2139,8 +2162,21 @@
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, 'Tiger Beetle Survey Data');
     const filename = `TigerBeetle${formatFilenameDate(state.meta.date||todayStr())}.xlsx`;
-    try{ XLSX.writeFile(wb, filename); showToast('Excel file downloading…'); }
+    return {wb, filename};
+  }
+
+  function exportBeetle(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    const built = buildBeetleWorkbook();
+    if(!built) return;
+    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
+  }
+
+  function shareBeetle(){
+    const built = buildBeetleWorkbook();
+    if(!built) return;
+    shareWorkbook(built.wb, built.filename);
   }
 
   async function clearBeetle(){
@@ -2497,13 +2533,33 @@
   function appendComment(base, extra){
     return [base, extra].filter(Boolean).join(' — ');
   }
+  // Hands a generated workbook to the device's native share sheet instead of
+  // downloading it — lets the person pick OneDrive, email, etc. directly.
+  // Cancelling the share sheet throws AbortError, which is a normal choice,
+  // not a failure, so it's deliberately silent.
+  async function shareWorkbook(wb, filename){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    if(!navigator.share){ showToast("Sharing isn't supported on this browser — use Export instead"); return; }
+    try{
+      const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+      const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const file = new File([blob], filename, {type: blob.type});
+      if(navigator.canShare && !navigator.canShare({files:[file]})){
+        showToast("Sharing files isn't supported on this browser — use Export instead");
+        return;
+      }
+      await navigator.share({files:[file], title: filename});
+    }catch(err){
+      if(err.name !== 'AbortError') showToast('Share failed — try Export instead');
+    }
+  }
+
   function excelDate(tsOrDateStr){
     const d = tsOrDateStr ? new Date(tsOrDateStr) : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
   }
 
-  function exportExcel(){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
+  function buildTurtleWorkbook(){
     const wb = XLSX.utils.book_new();
 
     const districtKey = state.meta.district;
@@ -2689,8 +2745,20 @@
 
     const datePart = formatFilenameDate(state.meta.date || todayStr());
     const filename = `${districtLabel}Survey${datePart}.xlsx`;
-    try{ XLSX.writeFile(wb, filename); showToast('Excel file downloading…'); }
+    return {wb, filename};
+  }
+
+  function exportExcel(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
+    const built = buildTurtleWorkbook();
+    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
+  }
+
+  function shareExcel(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
+    const built = buildTurtleWorkbook();
+    shareWorkbook(built.wb, built.filename);
   }
 
   // ---------- wire up ----------
@@ -2771,6 +2839,7 @@
     document.getElementById(id).addEventListener('input', updateNiTotalClutch);
   });
   document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
+  document.getElementById('shareNestInventoryBtn').addEventListener('click', shareNestInventory);
   document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
 
   // Tiger Beetle wiring
@@ -2800,8 +2869,10 @@
     });
   });
   document.getElementById('exportBeetleBtn').addEventListener('click', exportBeetle);
+  document.getElementById('shareBeetleBtn').addEventListener('click', shareBeetle);
   document.getElementById('clearBeetleBtn').addEventListener('click', clearBeetle);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
+  document.getElementById('shareBtn').addEventListener('click', shareExcel);
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
   document.getElementById('gtGridMinus').addEventListener('click', ()=>{
