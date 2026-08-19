@@ -570,6 +570,10 @@
       <div class="field"><label>District</label>
         <select id="editDistrict"><option value="apollo">Apollo</option><option value="playalinda">Playalinda</option></select>
       </div>
+      <div class="field"><label>Full beach run (Tiger Beetle)</label>
+        <select id="editBeetleFullBeachRun"><option value="off">Off (default)</option><option value="on">On</option></select>
+        <div style="font-size:11px; color:var(--ink-muted); margin-top:4px;">On: one continuous Tiger Beetle run across the whole 0–94 range, starting from the district above — its sequencing rule keeps applying the whole way through, uncapped. Off: stops suggesting past your current district's boundary (Apollo 44, Playalinda 45).</div>
+      </div>
       <div class="field"><label>Run time</label>
         <select id="editRunTime"><option value="Day">Day</option><option value="Night">Night</option></select>
       </div>
@@ -589,7 +593,6 @@
       <div class="settings-row"><span>Leatherback</span><input type="number" id="editLth"></div>
       <div class="settings-row"><span>Kemp's Ridley</span><input type="number" id="editKmp"></div>
     </div>
-    <div class="sheet-actions"><button class="btn btn-primary" id="saveSettingsBtn" style="flex:1;">Save</button></div>
 
     <button type="button" id="advancedSettingsToggle" style="width:100%; background:none; border:1px solid var(--line); color:var(--ink-muted); border-radius:10px; padding:11px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:22px;">
       <span>Additional Settings</span><span id="advancedSettingsArrow">▸</span>
@@ -601,6 +604,13 @@
         <div class="field"><label>Auto-fill grid from GPS</label>
           <select id="editGridAutoFill"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Buzzes the device once when live grid tracking confirms you've moved into a new grid — useful for a heads-up without needing to look at the screen. Requires grid tracking to be running.</div>
+        <div class="field"><label>Buzz on grid change</label>
+          <select id="editGridChangeBuzz"><option value="off">Off (default)</option><option value="on">On</option></select>
+        </div>
+      </div>
+      <div class="settings-group" style="margin-top:22px;">
+        <h3>Grid map</h3>
         <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
           <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -621,6 +631,8 @@
       </div>
       <input type="file" id="backupImportInput" accept=".json" style="display:none;">
     </div>
+
+    <div class="sheet-actions" style="margin-top:22px;"><button class="btn btn-primary" id="saveSettingsBtn" style="flex:1;">Save</button></div>
 
     <div class="settings-group" style="margin-top:22px;">
       <h3>Reset</h3>
@@ -669,7 +681,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, beetleFullBeachRun:false, gridChangeBuzz:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -703,6 +715,8 @@
     if(meta.observer && !meta.observerList.includes(meta.observer)) meta.observerList.push(meta.observer);
     if(!meta.currentMode) meta.currentMode = 'turtle';
     if(meta.gridAutoFill === undefined || meta.gridAutoFill === null) meta.gridAutoFill = false;
+    if(meta.beetleFullBeachRun === undefined || meta.beetleFullBeachRun === null) meta.beetleFullBeachRun = false;
+    if(meta.gridChangeBuzz === undefined || meta.gridChangeBuzz === null) meta.gridChangeBuzz = false;
 
     let species = loaded.species || base.species;
     if(!species.apollo && !species.playalinda){
@@ -1415,13 +1429,32 @@
 
   // Tracks the last 2 DISTINCT grids detected live, so "prior grid" (what you were
   // just in) and "current grid" (where you are now) can be told apart for GPS auto-fill.
-  let detectedGridHistory = []; // most recent first
+  // Debounced: a new grid only gets "confirmed" into history after several consecutive
+  // readings all agree — a single momentary GPS-jitter reading near a boundary
+  // (e.g. briefly bouncing back to a grid you already left) no longer corrupts it.
+  let detectedGridHistory = []; // most recent first, confirmed only
+  let pendingGridCandidate = null; // {district, gridNumber, count} — not yet confirmed
+  const GRID_DEBOUNCE_READINGS = 3;
+
   function recordDetectedGrid(result){
     if(!result) return;
-    const last = detectedGridHistory[0];
-    if(last && last.district===result.district && last.gridNumber===result.gridNumber) return;
-    detectedGridHistory.unshift({district: result.district, gridNumber: result.gridNumber});
-    if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
+    const confirmed = detectedGridHistory[0];
+    if(confirmed && confirmed.district===result.district && confirmed.gridNumber===result.gridNumber){
+      pendingGridCandidate = null; // back to the confirmed grid — drop any in-progress candidate
+      return;
+    }
+    if(pendingGridCandidate && pendingGridCandidate.district===result.district && pendingGridCandidate.gridNumber===result.gridNumber){
+      pendingGridCandidate.count++;
+    } else {
+      pendingGridCandidate = {district: result.district, gridNumber: result.gridNumber, count: 1};
+    }
+    if(pendingGridCandidate.count >= GRID_DEBOUNCE_READINGS){
+      const hadPriorGrid = detectedGridHistory.length > 0; // don't buzz on the very first detection, only on real changes
+      detectedGridHistory.unshift({district: pendingGridCandidate.district, gridNumber: pendingGridCandidate.gridNumber});
+      if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
+      pendingGridCandidate = null;
+      if(hadPriorGrid && state.meta.gridChangeBuzz && navigator.vibrate) navigator.vibrate(200);
+    }
   }
   function getCurrentDetectedGrid(){ return detectedGridHistory[0] || null; }
   function getPriorDetectedGrid(){ return detectedGridHistory[1] || detectedGridHistory[0] || null; }
@@ -1451,6 +1484,7 @@
     if(!gridMapSegments){ showToast('Load a grid map first'); return; }
     if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
     detectedGridHistory = [];
+    pendingGridCandidate = null;
     setTextAll(GRID_RESULT_IDS, 'Locating…');
     gridWatchId = navigator.geolocation.watchPosition(
       (pos)=>{ renderGridLiveResult(findNearestGridSegment(pos.coords.latitude, pos.coords.longitude), pos.coords.accuracy); },
@@ -2065,15 +2099,34 @@
   // Playalinda (verified against 94N->93S->93N->92S): N -> previous grid (-1), S.
   // S -> same grid, N. These are genuinely different patterns, not mirrors of each
   // other — each district's own established convention, not something derived.
-  function computeNextBeetleSuggestion(lastGrid, lastDirection, district){
+  //
+  // Normally capped at the district boundary (Apollo stops at 44, Playalinda stops
+  // at 45) so autofill doesn't wander into grid numbers that belong to the other
+  // district's numbering. With Full Beach Run on, the cap is removed and whichever
+  // district's rule you started with just keeps applying straight through — it does
+  // NOT switch to the other district's rule when the numbers cross the boundary.
+  function computeNextBeetleSuggestion(lastGrid, lastDirection, district, fullBeachRun){
     const g = parseInt(lastGrid, 10);
     if(isNaN(g)) return null;
+    let next;
     if(district === 'playalinda'){
-      if(lastDirection === 'N') return { grid: g-1, direction: 'S' };
-      return { grid: g, direction: 'N' };
+      next = (lastDirection === 'N') ? { grid: g-1, direction: 'S' } : { grid: g, direction: 'N' };
+      if(!fullBeachRun && next.grid < 45) return null;
+    } else {
+      next = (lastDirection === 'N') ? { grid: g, direction: 'S' } : { grid: g+1, direction: 'N' };
+      if(!fullBeachRun && next.grid > 44) return null;
     }
-    if(lastDirection === 'N') return { grid: g, direction: 'S' };
-    return { grid: g+1, direction: 'N' };
+    return next;
+  }
+
+  // Which district a grid number actually belongs to, regardless of which beach a
+  // Full Beach Run started from — used to label/count each entry correctly once the
+  // walk crosses the 44/45 boundary. Separate from the SEQUENCING rule, which stays
+  // fixed to whichever beach the run started at (see computeNextBeetleSuggestion) —
+  // otherwise switching rules mid-crossing would send the sequence backwards.
+  function districtForGrid(gridNum){
+    const n = parseInt(gridNum, 10);
+    return n >= 45 ? 'playalinda' : 'apollo';
   }
 
   function endBeetleTransect(){
@@ -2090,7 +2143,7 @@
         copulatingPairs: activeBeetleTransect.copulatingPairs,
         notes: '',
         startTs: activeBeetleTransect.startTs,
-        district: state.meta.district
+        district: districtForGrid(activeBeetleTransect.grid)
       };
       state.tigerBeetle.unshift(entry);
       activeBeetleTransect = null;
@@ -2103,13 +2156,17 @@
       document.getElementById('beetleGridPlus').disabled = false;
       document.getElementById('beetleDirection').disabled = false;
       document.getElementById('beetleStatusText').textContent = 'No transect in progress';
-      const next = computeNextBeetleSuggestion(entry.grid, entry.direction, entry.district);
+      const next = computeNextBeetleSuggestion(entry.grid, entry.direction, state.meta.district, state.meta.beetleFullBeachRun);
+      let cappedMsg = '';
       if(next){
         document.getElementById('beetleGridNumber').value = next.grid;
         document.getElementById('beetleDirection').value = next.direction;
+      } else {
+        const districtLabel = state.meta.district==='playalinda' ? 'Playalinda' : 'Apollo';
+        cappedMsg = ` — reached the end of ${districtLabel}'s grids. Enable Full Beach Run in Settings to continue, or switch district.`;
       }
       if(!ok){ showToast('Save FAILED — try again'); return; }
-      showToast('Transect saved');
+      showToast('Transect saved' + cappedMsg);
     });
   }
 
@@ -2374,6 +2431,8 @@
     document.getElementById('editDailyComment').value = state.meta.dailyComment || '';
     document.getElementById('editLightMode').value = state.meta.lightMode ? 'light' : 'dark';
     document.getElementById('editGridAutoFill').value = state.meta.gridAutoFill ? 'on' : 'off';
+    document.getElementById('editBeetleFullBeachRun').value = state.meta.beetleFullBeachRun ? 'on' : 'off';
+    document.getElementById('editGridChangeBuzz').value = state.meta.gridChangeBuzz ? 'on' : 'off';
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
   }
@@ -2389,6 +2448,8 @@
     state.meta.dailyComment = document.getElementById('editDailyComment').value.trim();
     state.meta.lightMode = document.getElementById('editLightMode').value === 'light';
     state.meta.gridAutoFill = document.getElementById('editGridAutoFill').value === 'on';
+    state.meta.beetleFullBeachRun = document.getElementById('editBeetleFullBeachRun').value === 'on';
+    state.meta.gridChangeBuzz = document.getElementById('editGridChangeBuzz').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
@@ -2545,12 +2606,12 @@
       const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       const file = new File([blob], filename, {type: blob.type});
       if(navigator.canShare && !navigator.canShare({files:[file]})){
-        showToast("Sharing files isn't supported on this browser — use Export instead");
+        showToast("This device won't share this file type — use Export instead");
         return;
       }
-      await navigator.share({files:[file], title: filename});
+      await navigator.share({files:[file]});
     }catch(err){
-      if(err.name !== 'AbortError') showToast('Share failed — try Export instead');
+      if(err.name !== 'AbortError') showToast(`Share failed (${err.name || 'error'}: ${err.message || 'no details'}) — use Export instead`);
     }
   }
 
