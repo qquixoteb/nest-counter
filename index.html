@@ -570,9 +570,9 @@
       <div class="field"><label>District</label>
         <select id="editDistrict"><option value="apollo">Apollo</option><option value="playalinda">Playalinda</option></select>
       </div>
-      <div class="field"><label>Full beach run (Tiger Beetle)</label>
-        <select id="editBeetleFullBeachRun"><option value="off">Off (default)</option><option value="on">On</option></select>
-        <div style="font-size:11px; color:var(--ink-muted); margin-top:4px;">On: one continuous Tiger Beetle run across the whole 0–94 range, starting from the district above — its sequencing rule keeps applying the whole way through, uncapped. Off: stops suggesting past your current district's boundary (Apollo 44, Playalinda 45).</div>
+      <div class="field"><label>Full beach run</label>
+        <select id="editFullBeachRun"><option value="off">Off (default)</option><option value="on">On</option></select>
+        <div style="font-size:11px; color:var(--ink-muted); margin-top:4px;">Turtle grid tally only — Tiger Beetle always runs the full beach. Off (usual case): Add Grid Tally's suggested next number stops at your district's boundary (Apollo 44, Playalinda 45). On: keeps suggesting past it, for the days you're covering the whole beach in one session.</div>
       </div>
       <div class="field"><label>Run time</label>
         <select id="editRunTime"><option value="Day">Day</option><option value="Night">Night</option></select>
@@ -681,7 +681,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, beetleFullBeachRun:false, gridChangeBuzz:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeBuzz:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -715,7 +715,7 @@
     if(meta.observer && !meta.observerList.includes(meta.observer)) meta.observerList.push(meta.observer);
     if(!meta.currentMode) meta.currentMode = 'turtle';
     if(meta.gridAutoFill === undefined || meta.gridAutoFill === null) meta.gridAutoFill = false;
-    if(meta.beetleFullBeachRun === undefined || meta.beetleFullBeachRun === null) meta.beetleFullBeachRun = false;
+    if(meta.fullBeachRun === undefined || meta.fullBeachRun === null) meta.fullBeachRun = false;
     if(meta.gridChangeBuzz === undefined || meta.gridChangeBuzz === null) meta.gridChangeBuzz = false;
 
     let species = loaded.species || base.species;
@@ -958,7 +958,12 @@
     if(relevant.length===0) return '';
     const nums = relevant.map(g=>parseInt(g.gridNumber,10)).filter(n=>!isNaN(n));
     if(nums.length===0) return '';
-    return district === 'playalinda' ? (Math.min(...nums)-1) : (Math.max(...nums)+1);
+    const next = district === 'playalinda' ? (Math.min(...nums)-1) : (Math.max(...nums)+1);
+    if(!state.meta.fullBeachRun){
+      if(district==='apollo' && next > 44) return null; // capped, distinct from "nothing logged yet"
+      if(district==='playalinda' && next < 45) return null;
+    }
+    return next;
   }
 
   function stepperField(label, id, type){
@@ -983,6 +988,11 @@
 
   function openGridTally(){
     let gridValue = suggestNextGrid();
+    if(gridValue === null){
+      gridValue = '';
+      const districtLabel = state.meta.district==='playalinda' ? 'Playalinda' : 'Apollo';
+      showToast(`Reached the end of ${districtLabel}'s grids — enable Full Beach Run in Settings to continue, or switch district`);
+    }
     if(state.meta.gridAutoFill){
       const prior = getPriorDetectedGrid();
       if(prior && prior.district === state.meta.district) gridValue = prior.gridNumber;
@@ -2099,31 +2109,20 @@
   // Playalinda (verified against 94N->93S->93N->92S): N -> previous grid (-1), S.
   // S -> same grid, N. These are genuinely different patterns, not mirrors of each
   // other — each district's own established convention, not something derived.
-  //
-  // Normally capped at the district boundary (Apollo stops at 44, Playalinda stops
-  // at 45) so autofill doesn't wander into grid numbers that belong to the other
-  // district's numbering. With Full Beach Run on, the cap is removed and whichever
-  // district's rule you started with just keeps applying straight through — it does
-  // NOT switch to the other district's rule when the numbers cross the boundary.
-  function computeNextBeetleSuggestion(lastGrid, lastDirection, district, fullBeachRun){
+  // Tiger Beetle surveys always run the full beach — never capped at the district
+  // boundary, unlike the turtle nest grid tally (see the fullBeachRun setting there).
+  function computeNextBeetleSuggestion(lastGrid, lastDirection, district){
     const g = parseInt(lastGrid, 10);
     if(isNaN(g)) return null;
-    let next;
     if(district === 'playalinda'){
-      next = (lastDirection === 'N') ? { grid: g-1, direction: 'S' } : { grid: g, direction: 'N' };
-      if(!fullBeachRun && next.grid < 45) return null;
-    } else {
-      next = (lastDirection === 'N') ? { grid: g, direction: 'S' } : { grid: g+1, direction: 'N' };
-      if(!fullBeachRun && next.grid > 44) return null;
+      return (lastDirection === 'N') ? { grid: g-1, direction: 'S' } : { grid: g, direction: 'N' };
     }
-    return next;
+    return (lastDirection === 'N') ? { grid: g, direction: 'S' } : { grid: g+1, direction: 'N' };
   }
 
-  // Which district a grid number actually belongs to, regardless of which beach a
-  // Full Beach Run started from — used to label/count each entry correctly once the
-  // walk crosses the 44/45 boundary. Separate from the SEQUENCING rule, which stays
-  // fixed to whichever beach the run started at (see computeNextBeetleSuggestion) —
-  // otherwise switching rules mid-crossing would send the sequence backwards.
+  // Which district a grid number actually belongs to (0-44 Apollo, 45-94 Playalinda)
+  // — used to label/count each entry correctly, since a beetle transect can freely
+  // cross from one district's numbering into the other's.
   function districtForGrid(gridNum){
     const n = parseInt(gridNum, 10);
     return n >= 45 ? 'playalinda' : 'apollo';
@@ -2156,17 +2155,13 @@
       document.getElementById('beetleGridPlus').disabled = false;
       document.getElementById('beetleDirection').disabled = false;
       document.getElementById('beetleStatusText').textContent = 'No transect in progress';
-      const next = computeNextBeetleSuggestion(entry.grid, entry.direction, state.meta.district, state.meta.beetleFullBeachRun);
-      let cappedMsg = '';
+      const next = computeNextBeetleSuggestion(entry.grid, entry.direction, state.meta.district);
       if(next){
         document.getElementById('beetleGridNumber').value = next.grid;
         document.getElementById('beetleDirection').value = next.direction;
-      } else {
-        const districtLabel = state.meta.district==='playalinda' ? 'Playalinda' : 'Apollo';
-        cappedMsg = ` — reached the end of ${districtLabel}'s grids. Enable Full Beach Run in Settings to continue, or switch district.`;
       }
       if(!ok){ showToast('Save FAILED — try again'); return; }
-      showToast('Transect saved' + cappedMsg);
+      showToast('Transect saved');
     });
   }
 
@@ -2431,7 +2426,7 @@
     document.getElementById('editDailyComment').value = state.meta.dailyComment || '';
     document.getElementById('editLightMode').value = state.meta.lightMode ? 'light' : 'dark';
     document.getElementById('editGridAutoFill').value = state.meta.gridAutoFill ? 'on' : 'off';
-    document.getElementById('editBeetleFullBeachRun').value = state.meta.beetleFullBeachRun ? 'on' : 'off';
+    document.getElementById('editFullBeachRun').value = state.meta.fullBeachRun ? 'on' : 'off';
     document.getElementById('editGridChangeBuzz').value = state.meta.gridChangeBuzz ? 'on' : 'off';
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
@@ -2448,7 +2443,7 @@
     state.meta.dailyComment = document.getElementById('editDailyComment').value.trim();
     state.meta.lightMode = document.getElementById('editLightMode').value === 'light';
     state.meta.gridAutoFill = document.getElementById('editGridAutoFill').value === 'on';
-    state.meta.beetleFullBeachRun = document.getElementById('editBeetleFullBeachRun').value === 'on';
+    state.meta.fullBeachRun = document.getElementById('editFullBeachRun').value === 'on';
     state.meta.gridChangeBuzz = document.getElementById('editGridChangeBuzz').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
