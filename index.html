@@ -97,7 +97,6 @@
   .export-btn{ background:var(--excel-green); border:1px solid var(--excel-green); color:#FFFFFF; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
   .export-row{ display:flex; gap:8px; margin-top:18px; }
   .export-row .export-btn{ flex:2; margin-top:0; }
-  .share-btn{ flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:13px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
   .new-day-btn{ width:100%; background:transparent; border:1px solid var(--rare); color:var(--rare); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; cursor:pointer; margin-top:10px; }
   .new-day-hint{ font-size:11px; color:var(--ink-muted); text-align:center; margin-top:6px; line-height:1.4; padding:0 8px; }
   .fab{ position:fixed; left:14px; right:14px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index:40; background:var(--gold); color:#2A1D05; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
@@ -271,7 +270,6 @@
 
 <div class="export-row">
   <button class="export-btn" id="exportBtn">⬇ Export</button>
-  <button class="share-btn" id="shareBtn">📤 Share</button>
 </div>
 <button class="new-day-btn" id="newDayBtn">🗓 Start New Day</button>
 <div class="new-day-hint">Clears today's Grid History, Index Log, and Subsequent Sightings — running counts and next-index numbers carry forward untouched</div>
@@ -290,7 +288,6 @@
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
-    <button class="share-btn" id="shareNestInventoryBtn">📤 Share</button>
   </div>
   <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
@@ -328,7 +325,6 @@
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportBeetleBtn">⬇ Export</button>
-    <button class="share-btn" id="shareBeetleBtn">📤 Share</button>
   </div>
   <button class="new-day-btn" id="clearBeetleBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Transect Log entries on this device</div>
@@ -645,7 +641,9 @@
         <div class="field"><label>Grid post</label>
           <select id="editGridPointSelect"></select>
         </div>
-        <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:14px;">📍 Capture Point for This Grid</button>
+        <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:8px;">📍 Capture Point for This Grid</button>
+        <button class="reset-btn" id="deleteGridPointBtn" style="margin-bottom:8px;">Delete Selected Grid Post</button>
+        <button class="reset-btn" id="addGridPointBtn" style="margin-bottom:8px;">＋ Add New Grid Post</button>
         <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
       </div>
       <div class="settings-group" style="margin-top:22px;">
@@ -872,7 +870,16 @@
   async function loadState(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw){ state = migrateState(JSON.parse(raw)); return false; }
+      if(raw){
+        state = migrateState(JSON.parse(raw));
+        // Keep the survey date synced to the device's local calendar date.
+        const currentDate = todayStr();
+        if(state.meta.date !== currentDate){
+          state.meta.date = currentDate;
+          await saveState();
+        }
+        return false;
+      }
       state = defaultState(); return true;
     }catch(e){ state = defaultState(); return true; }
   }
@@ -1513,11 +1520,8 @@
   }
 
   function initGridMap(){
-    if(state.gridMapOverride && state.gridMapOverride.length){
-      activateGridSegments(state.gridMapOverride, 2, 'Updated grid map');
-    } else {
-      activateGridSegments(BAKED_IN_GRID_ROWS, 2, 'Built-in grid map');
-    }
+    const rows = getActiveGridRowsNormalized();
+    activateGridSegments(rows, 2, state.gridMapOverride && state.gridMapOverride.length ? 'Updated grid map' : 'Built-in grid map');
   }
 
   // Returns the currently active grid map data, always normalized to [lon, lat,
@@ -1537,21 +1541,15 @@
       if(pa && pb && pa[1]===pb[1]) return parseInt(pa[2],10)-parseInt(pb[2],10);
       return a.localeCompare(b);
     });
-    sel.innerHTML = labels.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('')
-      + `<option value="__add_new__">+ Add new grid post…</option>`;
+    sel.innerHTML = labels.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
   }
 
-  async function captureGridPoint(){
+  async function captureGridPoint(labelOverride=null){
     const sel = document.getElementById('editGridPointSelect');
-    let label = sel.value;
-    if(label === '__add_new__'){
-      const input = prompt('New grid post label, matching the existing naming (e.g. GRID47 or GD62):');
-      if(!input) return;
-      label = input.trim();
-      if(!/^[A-Za-z]+\d+$/.test(label)){
-        showToast('Label must be a letter prefix followed by a number, e.g. GRID47');
-        return;
-      }
+    const label = labelOverride || (sel && sel.value);
+    if(!label || label === '__add_new__'){
+      showToast('Select a grid post first');
+      return;
     }
     if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
     showToast('Capturing point…');
@@ -1571,6 +1569,42 @@
       (err)=> showToast('GPS error — check permissions, try again'),
       {enableHighAccuracy:true, timeout:15000, maximumAge:0}
     );
+  }
+
+  async function addNewGridPoint(){
+    const input = prompt('New grid post label, matching the existing naming (e.g. GRID47 or GD62):');
+    if(!input) return;
+    const label = input.trim();
+    if(!/^[A-Za-z]+\d+$/.test(label)){
+      showToast('Label must be a letter prefix followed by a number, e.g. GRID47');
+      return;
+    }
+    if(getActiveGridRowsNormalized().some(r => r[2] === label)){
+      showToast(`${label} already exists — select it to update its point`);
+      return;
+    }
+    await captureGridPoint(label);
+  }
+
+  async function deleteSelectedGridPoint(){
+    const sel = document.getElementById('editGridPointSelect');
+    if(!sel || !sel.value){
+      showToast('Select a grid post first');
+      return;
+    }
+    const label = sel.value;
+    if(!confirm(`Delete grid post ${label} from the active grid map?\\n\\nThis removes the post from GPS grid detection and the grid-post list. You can restore all built-in posts with "Reset to built-in grid map".`)) return;
+
+    const rows = getActiveGridRowsNormalized().filter(r => r[2] !== label);
+    if(rows.length < 2){
+      showToast('Cannot delete this post — the map needs at least two posts');
+      return;
+    }
+    state.gridMapOverride = rows;
+    const saved = await saveState();
+    activateGridSegments(state.gridMapOverride, 2, 'Updated grid map');
+    populateGridPointSelect();
+    showToast(saved ? `Deleted ${label}` : `Deleted ${label} — save FAILED, check storage`);
   }
 
   async function resetGridMapToBuiltIn(){
@@ -2331,12 +2365,6 @@
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  function shareNestInventory(){
-    const built = buildNestInventoryWorkbook();
-    if(!built) return;
-    shareWorkbook(built.wb, built.filename);
-  }
-
   async function clearNestInventory(){
     if(!confirm("Clear today's Nest Inventory entries? This cannot be undone.")) return;
     state.nestInventory = [];
@@ -2501,12 +2529,6 @@
     if(!built) return;
     try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
-  }
-
-  function shareBeetle(){
-    const built = buildBeetleWorkbook();
-    if(!built) return;
-    shareWorkbook(built.wb, built.filename);
   }
 
   async function clearBeetle(){
@@ -2884,27 +2906,6 @@
   function appendComment(base, extra){
     return [base, extra].filter(Boolean).join(' — ');
   }
-  // Hands a generated workbook to the device's native share sheet instead of
-  // downloading it — lets the person pick OneDrive, email, etc. directly.
-  // Cancelling the share sheet throws AbortError, which is a normal choice,
-  // not a failure, so it's deliberately silent.
-  async function shareWorkbook(wb, filename){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
-    if(!navigator.share){ showToast("Sharing isn't supported on this browser — use Export instead"); return; }
-    try{
-      const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
-      const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-      const file = new File([blob], filename, {type: blob.type});
-      if(navigator.canShare && !navigator.canShare({files:[file]})){
-        showToast("This device won't share this file type — use Export instead");
-        return;
-      }
-      await navigator.share({files:[file]});
-    }catch(err){
-      if(err.name !== 'AbortError') showToast(`Share failed (${err.name || 'error'}: ${err.message || 'no details'}) — use Export instead`);
-    }
-  }
-
   function excelDate(tsOrDateStr){
     const d = tsOrDateStr ? new Date(tsOrDateStr) : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
@@ -3106,12 +3107,6 @@
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  function shareExcel(){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
-    const built = buildTurtleWorkbook();
-    shareWorkbook(built.wb, built.filename);
-  }
-
   // ---------- wire up ----------
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('settingsClose').addEventListener('click', closeSettings);
@@ -3157,6 +3152,8 @@
   document.getElementById('captureSave').addEventListener('click', saveCapture);
   document.getElementById('gpsCaptureBtn').addEventListener('click', attemptGeolocation);
   document.getElementById('captureGridPointBtn').addEventListener('click', captureGridPoint);
+  document.getElementById('deleteGridPointBtn').addEventListener('click', deleteSelectedGridPoint);
+  document.getElementById('addGridPointBtn').addEventListener('click', addNewGridPoint);
   document.getElementById('resetGridMapBtn').addEventListener('click', resetGridMapToBuiltIn);
   GRID_TOGGLE_BTN_IDS.forEach(id=>{
     const btn = document.getElementById(id);
@@ -3198,7 +3195,6 @@
     document.getElementById(id).addEventListener('input', updateNiTotalClutch);
   });
   document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
-  document.getElementById('shareNestInventoryBtn').addEventListener('click', shareNestInventory);
   document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
 
   // Tiger Beetle wiring
@@ -3228,10 +3224,8 @@
     });
   });
   document.getElementById('exportBeetleBtn').addEventListener('click', exportBeetle);
-  document.getElementById('shareBeetleBtn').addEventListener('click', shareBeetle);
   document.getElementById('clearBeetleBtn').addEventListener('click', clearBeetle);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
-  document.getElementById('shareBtn').addEventListener('click', shareExcel);
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
   document.getElementById('gtGridMinus').addEventListener('click', ()=>{
@@ -3277,6 +3271,18 @@
     renderAddGridButton();
     applyMode();
   })();
+
+  // If the app remains open across midnight, update the survey date automatically.
+  let lastKnownDate = todayStr();
+  setInterval(async ()=>{
+    const currentDate = todayStr();
+    if(!state || currentDate === lastKnownDate) return;
+    lastKnownDate = currentDate;
+    state.meta.date = currentDate;
+    await saveState();
+    renderMetaLine();
+    showToast(`Date updated to ${currentDate}`);
+  }, 60000);
 
 })();
 
