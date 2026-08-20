@@ -271,7 +271,7 @@
 
 <div class="export-row">
   <button class="export-btn" id="exportBtn">⬇ Export</button>
-  
+  <button class="share-btn" id="shareBtn">📤 Share</button>
 </div>
 <button class="new-day-btn" id="newDayBtn">🗓 Start New Day</button>
 <div class="new-day-hint">Clears today's Grid History, Index Log, and Subsequent Sightings — running counts and next-index numbers carry forward untouched</div>
@@ -290,7 +290,7 @@
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
-    
+    <button class="share-btn" id="shareNestInventoryBtn">📤 Share</button>
   </div>
   <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
@@ -328,7 +328,7 @@
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportBeetleBtn">⬇ Export</button>
-    
+    <button class="share-btn" id="shareBeetleBtn">📤 Share</button>
   </div>
   <button class="new-day-btn" id="clearBeetleBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Transect Log entries on this device</div>
@@ -647,9 +647,6 @@
         </div>
         <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:14px;">📍 Capture Point for This Grid</button>
         <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
-        <button class="reset-btn" id="deleteGridPointBtn" style="border-color: var(--danger); color: var(--danger); margin-bottom: 14px;">
-          🗑 Delete Selected Grid Post
-        </button>
       </div>
       <div class="settings-group" style="margin-top:22px;">
         <h3>Backup</h3>
@@ -1585,20 +1582,7 @@
     showToast(saved ? 'Reset to built-in grid map' : 'Reset locally — save FAILED, check storage');
   }
 
-  
-
-function deleteGridPoint() {
-  const sel = document.getElementById('editGridPointSelect');
-  const label = sel && sel.value;
-  if (!label || label === "__add_new__") { showToast('Select a valid grid post first'); return; }
-  if (!state.gridMapOverride || !state.gridMapOverride.length) { showToast('Cannot delete: using built-in grid map'); return; }
-  if (!confirm(`Delete grid post "${label}"? This cannot be undone.`)) return;
-  state.gridMapOverride = state.gridMapOverride.filter(r => r[2] !== label);
-  const ok = await saveState();
-  populateGridPointSelect();
-  if (ok) showToast(`Deleted grid post ${label}`); else showToast('Deleted locally — save FAILED');
-}
-// Closest point on a grid segment to the observer, using a local flat-meter
+  // Closest point on a grid segment to the observer, using a local flat-meter
   // approximation centered on the observer — accurate enough at this scale (a few km),
   // and simpler/faster than true great-circle segment math.
   function findNearestGridSegment(lat, lon){
@@ -2347,7 +2331,11 @@ function deleteGridPoint() {
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  
+  function shareNestInventory(){
+    const built = buildNestInventoryWorkbook();
+    if(!built) return;
+    shareWorkbook(built.wb, built.filename);
+  }
 
   async function clearNestInventory(){
     if(!confirm("Clear today's Nest Inventory entries? This cannot be undone.")) return;
@@ -2515,7 +2503,11 @@ function deleteGridPoint() {
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  
+  function shareBeetle(){
+    const built = buildBeetleWorkbook();
+    if(!built) return;
+    shareWorkbook(built.wb, built.filename);
+  }
 
   async function clearBeetle(){
     if(!confirm("Clear today's Transect Log entries? This cannot be undone.")) return;
@@ -2896,7 +2888,8 @@ function deleteGridPoint() {
   // downloading it — lets the person pick OneDrive, email, etc. directly.
   // Cancelling the share sheet throws AbortError, which is a normal choice,
   // not a failure, so it's deliberately silent.
-  
+  async function shareWorkbook(wb, filename){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
     if(!navigator.share){ showToast("Sharing isn't supported on this browser — use Export instead"); return; }
     try{
       const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
@@ -3112,6 +3105,11 @@ function deleteGridPoint() {
     try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
   }
+
+  function shareExcel(){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
+    const built = buildTurtleWorkbook();
+    shareWorkbook(built.wb, built.filename);
   }
 
   // ---------- wire up ----------
@@ -3160,7 +3158,6 @@ function deleteGridPoint() {
   document.getElementById('gpsCaptureBtn').addEventListener('click', attemptGeolocation);
   document.getElementById('captureGridPointBtn').addEventListener('click', captureGridPoint);
   document.getElementById('resetGridMapBtn').addEventListener('click', resetGridMapToBuiltIn);
-  document.getElementById('deleteGridPointBtn').addEventListener('click', deleteGridPoint);
   GRID_TOGGLE_BTN_IDS.forEach(id=>{
     const btn = document.getElementById(id);
     if(btn) btn.addEventListener('click', toggleGridTracking);
@@ -3201,7 +3198,7 @@ function deleteGridPoint() {
     document.getElementById(id).addEventListener('input', updateNiTotalClutch);
   });
   document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
-  
+  document.getElementById('shareNestInventoryBtn').addEventListener('click', shareNestInventory);
   document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
 
   // Tiger Beetle wiring
@@ -3231,10 +3228,10 @@ function deleteGridPoint() {
     });
   });
   document.getElementById('exportBeetleBtn').addEventListener('click', exportBeetle);
-  
+  document.getElementById('shareBeetleBtn').addEventListener('click', shareBeetle);
   document.getElementById('clearBeetleBtn').addEventListener('click', clearBeetle);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
-  
+  document.getElementById('shareBtn').addEventListener('click', shareExcel);
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
   document.getElementById('gtGridMinus').addEventListener('click', ()=>{
@@ -3265,9 +3262,6 @@ function deleteGridPoint() {
       document.getElementById('storageWarningBanner').classList.add('show');
     }
     const isFirstTime = await loadState();
-    // Option A: always set date to today on load
-    state.meta.date = todayStr();
-    await saveState();
     if(isFirstTime && storageAvailable) document.getElementById('firstTimeBanner').classList.add('show');
     applyTheme();
     initGridMap();
