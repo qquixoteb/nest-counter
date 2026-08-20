@@ -229,6 +229,21 @@
 </div>
 
 <div id="turtleModeContent">
+<div id="continuousTallyPanel" style="display:none;">
+  <div class="daily-totals" style="text-align:left; border-color:var(--gold);">
+    <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:8px;">Continuous Tally — grid auto-fills from live tracking, tallies save automatically when the grid changes</div>
+    <div class="field" style="margin-bottom:10px;"><label>Grid number</label>
+      <div class="stepper" style="width:100%;">
+        <button type="button" class="step-btn" id="ctGridMinus">−</button>
+        <input type="number" id="ctGridNumber" inputmode="numeric" style="flex:1; text-align:center; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:11px 8px; font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;">
+        <button type="button" class="step-btn" id="ctGridPlus">+</button>
+      </div>
+    </div>
+    <div id="ctSpeciesBlocks"></div>
+    <div id="ctRareBlocks"></div>
+    <button type="button" class="copy-btn" id="ctAddRare" style="width:100%; margin-top:4px;">+ Add rare species</button>
+  </div>
+</div>
 <div class="grid" id="speciesGrid"></div>
 
 <div id="dailyTotals" class="daily-totals">Today: no activity logged yet</div>
@@ -608,6 +623,10 @@
         <div class="field"><label>Buzz on grid change</label>
           <select id="editGridChangeBuzz"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. The grid number auto-fills from live grid tracking and updates as you move — type over it any time to correct it temporarily, but the next confirmed grid change overwrites it again. Whenever the detected grid changes, whatever's tallied so far is automatically saved for the grid you just left, and every counter resets to zero for the new one. Requires grid tracking to be running.</div>
+        <div class="field"><label>Continuous tally mode</label>
+          <select id="editContinuousTallyMode"><option value="off">Off (default)</option><option value="on">On</option></select>
+        </div>
       </div>
       <div class="settings-group" style="margin-top:22px;">
         <h3>Grid map</h3>
@@ -681,7 +700,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeBuzz:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeBuzz:false, continuousTallyMode:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -717,6 +736,7 @@
     if(meta.gridAutoFill === undefined || meta.gridAutoFill === null) meta.gridAutoFill = false;
     if(meta.fullBeachRun === undefined || meta.fullBeachRun === null) meta.fullBeachRun = false;
     if(meta.gridChangeBuzz === undefined || meta.gridChangeBuzz === null) meta.gridChangeBuzz = false;
+    if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
 
     let species = loaded.species || base.species;
     if(!species.apollo && !species.playalinda){
@@ -757,8 +777,8 @@
     document.getElementById('turtleModeContent').style.display = state.meta.currentMode==='turtle' ? 'block' : 'none';
     document.getElementById('nestInventoryModeContent').style.display = state.meta.currentMode==='nestInventory' ? 'block' : 'none';
     document.getElementById('tigerBeetleModeContent').style.display = state.meta.currentMode==='tigerBeetle' ? 'block' : 'none';
-    document.getElementById('addGridBtn').style.display = state.meta.currentMode==='turtle' ? 'block' : 'none';
     document.getElementById('modeTitle').textContent = MODE_TITLES[state.meta.currentMode] || 'Nest Counter';
+    applyContinuousTallyMode();
   }
 
   function renderSurveyPicker(){
@@ -952,18 +972,30 @@
   }
 
   // ---------- grid tally form ----------
+  // Single source of truth for "has this district's turtle grid run reached its cap"
+  // — used both by suggestNextGrid (to stop auto-suggesting) and by the Add Grid
+  // Tally button (to switch its label/action to Run Complete / Run Whole Beach).
+  function isDistrictCapped(){
+    if(state.meta.fullBeachRun) return false;
+    const district = state.meta.district;
+    const relevant = state.grids.filter(g => g.district === district);
+    if(relevant.length===0) return false;
+    const nums = relevant.map(g=>parseInt(g.gridNumber,10)).filter(n=>!isNaN(n));
+    if(nums.length===0) return false;
+    const next = district === 'playalinda' ? (Math.min(...nums)-1) : (Math.max(...nums)+1);
+    if(district==='apollo' && next > 44) return true;
+    if(district==='playalinda' && next < 45) return true;
+    return false;
+  }
+
   function suggestNextGrid(){
     const district = state.meta.district;
     const relevant = state.grids.filter(g => g.district === district);
     if(relevant.length===0) return '';
     const nums = relevant.map(g=>parseInt(g.gridNumber,10)).filter(n=>!isNaN(n));
     if(nums.length===0) return '';
-    const next = district === 'playalinda' ? (Math.min(...nums)-1) : (Math.max(...nums)+1);
-    if(!state.meta.fullBeachRun){
-      if(district==='apollo' && next > 44) return null; // capped, distinct from "nothing logged yet"
-      if(district==='playalinda' && next < 45) return null;
-    }
-    return next;
+    if(isDistrictCapped()) return null; // distinct from '' ("nothing logged yet")
+    return district === 'playalinda' ? (Math.min(...nums)-1) : (Math.max(...nums)+1);
   }
 
   function stepperField(label, id, type){
@@ -984,6 +1016,74 @@
         input.value = next;
       });
     });
+  }
+
+  // ---------- continuous tally mode ----------
+  // Persistent alternative to the Add Grid Tally modal: grid number auto-fills from
+  // live GPS tracking (editable any time, but overwritten again on the next confirmed
+  // transition), and whatever's tallied gets auto-committed the moment the detected
+  // grid changes, then resets to zero for the new grid. Reuses the exact same
+  // processGridTally() core as the modal — same index-threshold and queue logic.
+  function buildContinuousSpeciesBlocks(){
+    const speciesBlocksEl = document.getElementById('ctSpeciesBlocks');
+    speciesBlocksEl.innerHTML = FIXED_TALLY_SPECIES.map(meta => `
+      <div class="tally-species-block" style="border-color:${meta.accent};">
+        <div class="accent-bar" style="background:${meta.accent};"></div>
+        <div class="tally-species-name">${meta.label}</div>
+        <div class="tally-fields">
+          ${stepperField('FC↑', `ct_${meta.id}_fca`, 'fc')}
+          ${stepperField('FC↓', `ct_${meta.id}_fcb`, 'fc')}
+          ${stepperField('N↑', `ct_${meta.id}_na`, 'nest')}
+          ${stepperField('N↓', `ct_${meta.id}_nb`, 'nest')}
+          ${stepperField('Pred', `ct_${meta.id}_pred`, 'pred')}
+        </div>
+      </div>`).join('');
+    wireSteppers(speciesBlocksEl);
+    document.getElementById('ctRareBlocks').innerHTML = '';
+  }
+
+  function initContinuousTallyPanel(){
+    buildContinuousSpeciesBlocks();
+    let gridValue = suggestNextGrid();
+    if(gridValue === null) gridValue = '';
+    if(state.meta.gridAutoFill){
+      const prior = getPriorDetectedGrid();
+      if(prior && prior.district === state.meta.district) gridValue = prior.gridNumber;
+    } else {
+      const current = getCurrentDetectedGrid();
+      if(current && current.district === state.meta.district) gridValue = current.gridNumber;
+    }
+    document.getElementById('ctGridNumber').value = gridValue;
+  }
+
+  // Called automatically whenever live grid tracking confirms a real transition
+  // (see recordDetectedGrid). Commits whatever's tallied so far for the grid being
+  // left, then resets every counter to zero for the newly-entered grid.
+  async function commitContinuousTally(previousGridNumber, newGridNumber){
+    const hasAnyTally = FIXED_TALLY_SPECIES.some(meta =>
+      numVal(`ct_${meta.id}_fca`) || numVal(`ct_${meta.id}_fcb`) || numVal(`ct_${meta.id}_na`) || numVal(`ct_${meta.id}_nb`) || numVal(`ct_${meta.id}_pred`)
+    ) || document.querySelectorAll('#ctRareBlocks .rare-block').length > 0;
+
+    if(hasAnyTally){
+      const result = await processGridTally(previousGridNumber, 'ct', 'ctRareBlocks');
+      if(result.ok){
+        showToast(`Grid ${result.gridNumber} auto-saved${result.districtSwitchMsg}`);
+        if(captureQueue.length>0) processQueue();
+        else if(subsequentQueue.length>0) processSubsequentQueue();
+      } else if(result.reason==='save-failed'){
+        showToast(`Save FAILED for grid ${previousGridNumber} — check storage, then verify counts`);
+      }
+    }
+    buildContinuousSpeciesBlocks();
+    document.getElementById('ctGridNumber').value = newGridNumber;
+  }
+
+  function applyContinuousTallyMode(){
+    const on = state.meta.continuousTallyMode;
+    document.getElementById('continuousTallyPanel').style.display = on ? 'block' : 'none';
+    const fab = document.getElementById('addGridBtn');
+    if(fab) fab.style.display = on ? 'none' : (state.meta.currentMode==='turtle' ? 'block' : 'none');
+    if(on) initContinuousTallyPanel();
   }
 
   function openGridTally(){
@@ -1017,7 +1117,7 @@
     document.getElementById('gridTallyOverlay').classList.add('show');
   }
 
-  function addRareBlock(){
+  function addRareBlock(idPrefix, containerId){
     const idx = rareBlockIdx++;
     const div = document.createElement('div');
     div.className = 'rare-block';
@@ -1026,39 +1126,53 @@
       <button type="button" class="rm-rare" data-idx="${idx}">✕</button>
       <div class="field" style="margin-bottom:8px;">
         <label>Species</label>
-        <select id="gtr_${idx}_species">
+        <select id="${idPrefix}r_${idx}_species">
           <option value="leatherback">Leatherback</option>
           <option value="kemps">Kemp's Ridley</option>
           <option value="other">Other (specify)</option>
         </select>
       </div>
-      <div class="field" id="gtr_${idx}_namewrap" style="display:none; margin-bottom:8px;">
+      <div class="field" id="${idPrefix}r_${idx}_namewrap" style="display:none; margin-bottom:8px;">
         <label>Species name</label>
-        <input type="text" id="gtr_${idx}_name" placeholder="e.g. Hawksbill">
+        <input type="text" id="${idPrefix}r_${idx}_name" placeholder="e.g. Hawksbill">
       </div>
       <div class="tally-fields">
-        ${stepperField('FC↑', `gtr_${idx}_fca`, 'fc')}
-        ${stepperField('FC↓', `gtr_${idx}_fcb`, 'fc')}
-        ${stepperField('N↑', `gtr_${idx}_na`, 'nest')}
-        ${stepperField('N↓', `gtr_${idx}_nb`, 'nest')}
-        ${stepperField('Pred', `gtr_${idx}_pred`, 'pred')}
+        ${stepperField('FC↑', `${idPrefix}r_${idx}_fca`, 'fc')}
+        ${stepperField('FC↓', `${idPrefix}r_${idx}_fcb`, 'fc')}
+        ${stepperField('N↑', `${idPrefix}r_${idx}_na`, 'nest')}
+        ${stepperField('N↓', `${idPrefix}r_${idx}_nb`, 'nest')}
+        ${stepperField('Pred', `${idPrefix}r_${idx}_pred`, 'pred')}
       </div>`;
-    document.getElementById('gtRareBlocks').appendChild(div);
+    document.getElementById(containerId).appendChild(div);
     wireSteppers(div);
     div.querySelector('.rm-rare').addEventListener('click', ()=> div.remove());
-    const sel = div.querySelector(`#gtr_${idx}_species`);
-    const nameWrap = div.querySelector(`#gtr_${idx}_namewrap`);
+    const sel = div.querySelector(`#${idPrefix}r_${idx}_species`);
+    const nameWrap = div.querySelector(`#${idPrefix}r_${idx}_namewrap`);
     sel.addEventListener('change', ()=>{ nameWrap.style.display = sel.value==='other' ? 'block' : 'none'; });
   }
 
   function numVal(id){ return Math.max(0, parseInt(document.getElementById(id).value,10) || 0); }
 
-  async function saveGridTally(){
-    const gridNumber = document.getElementById('gtGridNumber').value.trim();
-    if(!gridNumber){ showToast('Enter a grid number'); return; }
+  // Core grid-tally processing, shared by the modal (Add Grid Tally) and the
+  // Continuous Tally panel — same district-switch, index-threshold, merge, and
+  // queue-population logic either way, just parameterized on which DOM ids to
+  // read the tally values from. Returns a result object; callers handle their
+  // own UI wrap-up (closing a modal vs. resetting counters for the next grid).
+  async function processGridTally(gridNumberRaw, idPrefix, rareContainerId){
+    const gridNumber = (gridNumberRaw||'').trim();
+    if(!gridNumber) return {ok:false, reason:'no-grid'};
+
+    const districtSnapshot = state.meta.district;
+    let districtSwitchMsg = '';
+    const correctDistrict = districtForGrid(gridNumber);
+    if(correctDistrict !== state.meta.district){
+      state.meta.district = correctDistrict;
+      const districtLabel = correctDistrict==='playalinda' ? 'Playalinda' : 'Apollo';
+      districtSwitchMsg = ` — switched to ${districtLabel}'s running totals`;
+    }
 
     const speciesSnapshot = JSON.parse(JSON.stringify(state.species));
-    const gridsSnapshot = JSON.parse(JSON.stringify(state.grids)); // full rollback point — covers both merge and fresh-add cases
+    const gridsSnapshot = JSON.parse(JSON.stringify(state.grids));
     captureQueue = [];
     subsequentQueue = [];
 
@@ -1067,17 +1181,16 @@
 
     const newTalliesFixed = {};
     FIXED_TALLY_SPECIES.forEach(meta=>{
-      const fca=numVal(`gt_${meta.id}_fca`), fcb=numVal(`gt_${meta.id}_fcb`),
-            na=numVal(`gt_${meta.id}_na`), nb=numVal(`gt_${meta.id}_nb`), pred=numVal(`gt_${meta.id}_pred`);
+      const fca=numVal(`${idPrefix}_${meta.id}_fca`), fcb=numVal(`${idPrefix}_${meta.id}_fcb`),
+            na=numVal(`${idPrefix}_${meta.id}_na`), nb=numVal(`${idPrefix}_${meta.id}_nb`), pred=numVal(`${idPrefix}_${meta.id}_pred`);
       const totalNew = na+nb+pred;
       const sp = currentSpecies()[meta.id];
       const before = sp.count;
       const after = before+totalNew;
-      const nextIndexBeforeThis = sp.nextIndex; // captured pre-change, only used if this grid is a fresh (non-merge) entry
+      const nextIndexBeforeThis = sp.nextIndex;
       if(totalNew>0){
         const nums = computeTriggeredNumbers(before, after, sp.interval, false, sp.nextIndex);
         nums.forEach(n=>captureQueue.push({speciesId:meta.id, speciesLabel:meta.label, nestNumber:n, grid:gridNumber}));
-        // predated nests that did NOT land on an index number still need a subsequent-sighting entry
         const predStart = before+na+nb+1;
         for(let n=predStart; n<=after; n++){
           if(!nums.includes(n)) subsequentQueue.push({speciesId:meta.id, speciesLabel:meta.label, nestNumber:n, grid:gridNumber});
@@ -1090,16 +1203,16 @@
     });
 
     const newRareEntries = [];
-    document.querySelectorAll('#gtRareBlocks .rare-block').forEach(div=>{
+    document.querySelectorAll(`#${rareContainerId} .rare-block`).forEach(div=>{
       const idx = div.dataset.idx;
-      const speciesType = document.getElementById(`gtr_${idx}_species`).value;
-      const fca=numVal(`gtr_${idx}_fca`), fcb=numVal(`gtr_${idx}_fcb`), na=numVal(`gtr_${idx}_na`), nb=numVal(`gtr_${idx}_nb`), pred=numVal(`gtr_${idx}_pred`);
+      const speciesType = document.getElementById(`${idPrefix}r_${idx}_species`).value;
+      const fca=numVal(`${idPrefix}r_${idx}_fca`), fcb=numVal(`${idPrefix}r_${idx}_fcb`), na=numVal(`${idPrefix}r_${idx}_na`), nb=numVal(`${idPrefix}r_${idx}_nb`), pred=numVal(`${idPrefix}r_${idx}_pred`);
       const totalNew = na+nb+pred;
 
       let label, nums = [], runningAfter = null, otherName = '';
 
       if(speciesType==='other'){
-        otherName = document.getElementById(`gtr_${idx}_name`).value.trim();
+        otherName = document.getElementById(`${idPrefix}r_${idx}_name`).value.trim();
         if(!otherName) return;
         label = otherName;
         for(let i=0;i<totalNew;i++) nums.push(null);
@@ -1152,22 +1265,35 @@
     if(!ok){
       state.species = speciesSnapshot;
       state.grids = gridsSnapshot;
+      state.meta.district = districtSnapshot;
       renderSpeciesGrid();
-      showToast('Save FAILED — grid tally NOT saved, try again');
-      return;
+      return {ok:false, reason:'save-failed'};
     }
     renderSpeciesGrid();
     renderGridHistory();
+    renderMetaLine();
+    renderAddGridButton();
     renderDailyTotals();
+    return {ok:true, isMerge, districtSwitchMsg, gridNumber};
+  }
+
+  async function saveGridTally(){
+    const gridNumber = document.getElementById('gtGridNumber').value.trim();
+    if(!gridNumber){ showToast('Enter a grid number'); return; }
+    const result = await processGridTally(gridNumber, 'gt', 'gtRareBlocks');
+    if(!result.ok){
+      if(result.reason==='save-failed') showToast('Save FAILED — grid tally NOT saved, try again');
+      return;
+    }
     document.getElementById('gridTallyOverlay').classList.remove('show');
     if(captureQueue.length>0){
-      showToast(`Grid ${gridNumber} ${isMerge?'updated':'saved'} — ${captureQueue.length} index nest(s) to capture`);
+      showToast(`Grid ${result.gridNumber} ${result.isMerge?'updated':'saved'}${result.districtSwitchMsg} — ${captureQueue.length} index nest(s) to capture`);
       processQueue();
     } else if(subsequentQueue.length>0){
-      showToast(`Grid ${gridNumber} ${isMerge?'updated':'saved'} — ${subsequentQueue.length} predated nest(s) to log`);
+      showToast(`Grid ${result.gridNumber} ${result.isMerge?'updated':'saved'}${result.districtSwitchMsg} — ${subsequentQueue.length} predated nest(s) to log`);
       processSubsequentQueue();
     } else {
-      showToast(`Grid ${gridNumber} ${isMerge?'updated (added to existing entry)':'saved'}`);
+      showToast(`Grid ${result.gridNumber} ${result.isMerge?'updated (added to existing entry)':'saved'}${result.districtSwitchMsg}`);
     }
   }
 
@@ -1179,6 +1305,12 @@
 
   // Live-only summary of today's activity — recomputed from state.grids each call,
   // never itself persisted or included in export.
+  function renderAddGridButton(){
+    const btn = document.getElementById('addGridBtn');
+    if(!btn) return;
+    btn.textContent = isDistrictCapped() ? 'Run Complete — Run Whole Beach' : '+ Add Grid Tally';
+  }
+
   function renderDailyTotals(){
     const el = document.getElementById('dailyTotals');
     if(!el) return;
@@ -1459,11 +1591,16 @@
       pendingGridCandidate = {district: result.district, gridNumber: result.gridNumber, count: 1};
     }
     if(pendingGridCandidate.count >= GRID_DEBOUNCE_READINGS){
-      const hadPriorGrid = detectedGridHistory.length > 0; // don't buzz on the very first detection, only on real changes
+      const hadPriorGrid = detectedGridHistory.length > 0; // don't buzz/commit on the very first detection, only on real changes
+      const previousConfirmed = detectedGridHistory[0]; // capture before unshift, for continuous-tally auto-commit
       detectedGridHistory.unshift({district: pendingGridCandidate.district, gridNumber: pendingGridCandidate.gridNumber});
       if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
+      const newGridNumber = pendingGridCandidate.gridNumber;
       pendingGridCandidate = null;
       if(hadPriorGrid && state.meta.gridChangeBuzz && navigator.vibrate) navigator.vibrate(200);
+      if(hadPriorGrid && state.meta.continuousTallyMode && state.meta.currentMode==='turtle'){
+        commitContinuousTally(previousConfirmed.gridNumber, newGridNumber);
+      }
     }
   }
   function getCurrentDetectedGrid(){ return detectedGridHistory[0] || null; }
@@ -1625,6 +1762,7 @@
     renderSpeciesGrid();
     renderGridHistory();
     renderDailyTotals();
+    renderAddGridButton();
     renderLog();
     renderSubsequent();
     if(!ok){ showToast('Save FAILED — try again'); return; }
@@ -2428,6 +2566,7 @@
     document.getElementById('editGridAutoFill').value = state.meta.gridAutoFill ? 'on' : 'off';
     document.getElementById('editFullBeachRun').value = state.meta.fullBeachRun ? 'on' : 'off';
     document.getElementById('editGridChangeBuzz').value = state.meta.gridChangeBuzz ? 'on' : 'off';
+    document.getElementById('editContinuousTallyMode').value = state.meta.continuousTallyMode ? 'on' : 'off';
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
   }
@@ -2445,6 +2584,7 @@
     state.meta.gridAutoFill = document.getElementById('editGridAutoFill').value === 'on';
     state.meta.fullBeachRun = document.getElementById('editFullBeachRun').value === 'on';
     state.meta.gridChangeBuzz = document.getElementById('editGridChangeBuzz').value === 'on';
+    state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
@@ -2457,6 +2597,8 @@
     applyTheme();
     renderSpeciesGrid();
     renderMetaLine();
+    renderAddGridButton();
+    applyMode();
     if(!ok){ showToast('Save FAILED — settings NOT saved, try again'); return; }
     closeSettings();
     showToast('Settings saved');
@@ -2469,7 +2611,7 @@
     applyTheme();
     initGridMap();
     applyMode();
-    renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals();
+    renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
     renderNestInventory(); renderBeetleLog();
     closeSettings();
     showToast('Reset complete');
@@ -2509,7 +2651,7 @@
       applyTheme();
       initGridMap();
       applyMode();
-      renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals();
+      renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
       renderNestInventory(); renderBeetleLog();
       if(!ok){ showToast('Imported locally — save FAILED, check storage'); return; }
       showToast('Backup imported');
@@ -2535,6 +2677,7 @@
     renderSubsequent();
     renderMetaLine();
     renderDailyTotals();
+    renderAddGridButton();
     if(!ok){ showToast('Save FAILED after clearing — check storage, then verify counts'); return; }
     showToast('New day started — running counts carried forward');
   }
@@ -2842,11 +2985,20 @@
   document.getElementById('editDistrict').addEventListener('change', (e)=> populateCountFields(e.target.value));
   document.getElementById('editObserver').addEventListener('change', handleObserverDropdownChange);
 
-  document.getElementById('addGridBtn').addEventListener('click', openGridTally);
+  document.getElementById('addGridBtn').addEventListener('click', async ()=>{
+    if(isDistrictCapped()){
+      state.meta.fullBeachRun = true;
+      await saveState();
+      renderAddGridButton();
+      showToast('Full Beach Run enabled — continuing into the next district');
+    }
+    openGridTally();
+  });
   document.getElementById('gridTallyClose').addEventListener('click', ()=>document.getElementById('gridTallyOverlay').classList.remove('show'));
   document.getElementById('gtCancel').addEventListener('click', ()=>document.getElementById('gridTallyOverlay').classList.remove('show'));
   document.getElementById('gtSave').addEventListener('click', saveGridTally);
-  document.getElementById('gtAddRare').addEventListener('click', addRareBlock);
+  document.getElementById('gtAddRare').addEventListener('click', ()=> addRareBlock('gt', 'gtRareBlocks'));
+  document.getElementById('ctAddRare').addEventListener('click', ()=> addRareBlock('ct', 'ctRareBlocks'));
 
   document.getElementById('captureClose').addEventListener('click', closeCaptureModal);
   document.getElementById('captureCancel').addEventListener('click', closeCaptureModal);
@@ -2941,6 +3093,16 @@
     const current = parseInt(input.value,10);
     input.value = (isNaN(current)?0:current) + 1;
   });
+  document.getElementById('ctGridMinus').addEventListener('click', ()=>{
+    const input = document.getElementById('ctGridNumber');
+    const current = parseInt(input.value,10);
+    input.value = Math.max(0, (isNaN(current)?0:current) - 1);
+  });
+  document.getElementById('ctGridPlus').addEventListener('click', ()=>{
+    const input = document.getElementById('ctGridNumber');
+    const current = parseInt(input.value,10);
+    input.value = (isNaN(current)?0:current) + 1;
+  });
 
   // ---------- init ----------
   (async function init(){
@@ -2960,6 +3122,7 @@
     renderSubsequent();
     renderNestInventory();
     renderBeetleLog();
+    renderAddGridButton();
     applyMode();
   })();
 
