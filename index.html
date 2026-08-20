@@ -641,9 +641,9 @@
         <div class="field"><label>Grid post</label>
           <select id="editGridPointSelect"></select>
         </div>
-        <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:8px;">📍 Capture Point for This Grid</button>
-        <button class="reset-btn" id="deleteGridPointBtn" style="margin-bottom:8px;">Delete Selected Grid Post</button>
-        <button class="reset-btn" id="addGridPointBtn" style="margin-bottom:8px;">＋ Add New Grid Post</button>
+        <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:14px;">📍 Capture Point for This Grid</button>
+        <button class="reset-btn" id="deleteSelectedGridPostBtn" style="border-color:var(--danger); color:var(--danger); margin-bottom:8px;">🗑 Delete Selected Grid Post</button>
+        <button class="reset-btn" id="addNewGridPostBtn" style="margin-bottom:8px;">＋ Add New Grid Post</button>
         <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
       </div>
       <div class="settings-group" style="margin-top:22px;">
@@ -689,7 +689,16 @@
   let editingSubId = null;
   let rareBlockIdx = 0;
 
-  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+  async function syncDateToToday(){
+    const today=todayStr();
+    if(state?.meta && state.meta.date!==today){
+      state.meta.date=today;
+      await saveState();
+      renderMetaLine();
+    }
+  }
 
   function guessRunTime(){ return new Date().getHours() < 17 ? 'Day' : 'Night'; }
 
@@ -870,16 +879,7 @@
   async function loadState(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw){
-        state = migrateState(JSON.parse(raw));
-        // Keep the survey date synced to the device's local calendar date.
-        const currentDate = todayStr();
-        if(state.meta.date !== currentDate){
-          state.meta.date = currentDate;
-          await saveState();
-        }
-        return false;
-      }
+      if(raw){ state = migrateState(JSON.parse(raw)); return false; }
       state = defaultState(); return true;
     }catch(e){ state = defaultState(); return true; }
   }
@@ -1520,8 +1520,11 @@
   }
 
   function initGridMap(){
-    const rows = getActiveGridRowsNormalized();
-    activateGridSegments(rows, 2, state.gridMapOverride && state.gridMapOverride.length ? 'Updated grid map' : 'Built-in grid map');
+    if(state.gridMapOverride && state.gridMapOverride.length){
+      activateGridSegments(state.gridMapOverride, 2, 'Updated grid map');
+    } else {
+      activateGridSegments(BAKED_IN_GRID_ROWS, 2, 'Built-in grid map');
+    }
   }
 
   // Returns the currently active grid map data, always normalized to [lon, lat,
@@ -1541,21 +1544,20 @@
       if(pa && pb && pa[1]===pb[1]) return parseInt(pa[2],10)-parseInt(pb[2],10);
       return a.localeCompare(b);
     });
+    const current = sel.value;
     sel.innerHTML = labels.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    if(labels.includes(current)) sel.value=current;
   }
 
   async function captureGridPoint(labelOverride=null){
     const sel = document.getElementById('editGridPointSelect');
-    const label = labelOverride || (sel && sel.value);
-    if(!label || label === '__add_new__'){
-      showToast('Select a grid post first');
-      return;
-    }
+    const label = labelOverride || sel.value;
+    if(!label){ showToast('Select a grid post first'); return; }
     if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
     showToast('Capturing point…');
     navigator.geolocation.getCurrentPosition(
       async (pos)=>{
-        const rows = getActiveGridRowsNormalized().slice(); // copy — never mutate BAKED_IN_GRID_ROWS in place
+        const rows = getActiveGridRowsNormalized().map(r=>[r[0],r[1],r[2]]);
         const idx = rows.findIndex(r => r[2] === label);
         const newRow = [pos.coords.longitude, pos.coords.latitude, label];
         if(idx >= 0) rows[idx] = newRow; else rows.push(newRow);
@@ -1566,12 +1568,12 @@
         document.getElementById('editGridPointSelect').value = label;
         showToast(saved ? `Point captured for ${label}` : `Captured for ${label} — save FAILED, check storage`);
       },
-      (err)=> showToast('GPS error — check permissions, try again'),
+      ()=> showToast('GPS error — check permissions, try again'),
       {enableHighAccuracy:true, timeout:15000, maximumAge:0}
     );
   }
 
-  async function addNewGridPoint(){
+  async function addNewGridPost(){
     const input = prompt('New grid post label, matching the existing naming (e.g. GRID47 or GD62):');
     if(!input) return;
     const label = input.trim();
@@ -1579,32 +1581,25 @@
       showToast('Label must be a letter prefix followed by a number, e.g. GRID47');
       return;
     }
-    if(getActiveGridRowsNormalized().some(r => r[2] === label)){
-      showToast(`${label} already exists — select it to update its point`);
+    if(getActiveGridRowsNormalized().some(r=>String(r[2]).toLowerCase()===label.toLowerCase())){
+      showToast(`Grid post ${label} already exists`);
       return;
     }
     await captureGridPoint(label);
   }
 
-  async function deleteSelectedGridPoint(){
+  async function deleteSelectedGridPost(){
     const sel = document.getElementById('editGridPointSelect');
-    if(!sel || !sel.value){
-      showToast('Select a grid post first');
-      return;
-    }
     const label = sel.value;
-    if(!confirm(`Delete grid post ${label} from the active grid map?\\n\\nThis removes the post from GPS grid detection and the grid-post list. You can restore all built-in posts with "Reset to built-in grid map".`)) return;
-
-    const rows = getActiveGridRowsNormalized().filter(r => r[2] !== label);
-    if(rows.length < 2){
-      showToast('Cannot delete this post — the map needs at least two posts');
-      return;
-    }
+    if(!label){ showToast('Select a grid post first'); return; }
+    if(!confirm(`Delete grid post ${label}? This cannot be undone.`)) return;
+    const rows = getActiveGridRowsNormalized().filter(r=>r[2]!==label).map(r=>[r[0],r[1],r[2]]);
     state.gridMapOverride = rows;
     const saved = await saveState();
-    activateGridSegments(state.gridMapOverride, 2, 'Updated grid map');
+    if(rows.length >= 2) activateGridSegments(rows, 2, 'Updated grid map');
+    else { gridMapSegments=[]; setTextAll(GRID_STATUS_IDS,'Updated grid map — not enough posts for segments'); }
     populateGridPointSelect();
-    showToast(saved ? `Deleted ${label}` : `Deleted ${label} — save FAILED, check storage`);
+    showToast(saved ? `Deleted ${label}` : `Deleted ${label} locally — save FAILED, check storage`);
   }
 
   async function resetGridMapToBuiltIn(){
@@ -2906,6 +2901,10 @@
   function appendComment(base, extra){
     return [base, extra].filter(Boolean).join(' — ');
   }
+  // Hands a generated workbook to the device's native share sheet instead of
+  // downloading it — lets the person pick OneDrive, email, etc. directly.
+  // Cancelling the share sheet throws AbortError, which is a normal choice,
+  // not a failure, so it's deliberately silent.
   function excelDate(tsOrDateStr){
     const d = tsOrDateStr ? new Date(tsOrDateStr) : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
@@ -3152,8 +3151,8 @@
   document.getElementById('captureSave').addEventListener('click', saveCapture);
   document.getElementById('gpsCaptureBtn').addEventListener('click', attemptGeolocation);
   document.getElementById('captureGridPointBtn').addEventListener('click', captureGridPoint);
-  document.getElementById('deleteGridPointBtn').addEventListener('click', deleteSelectedGridPoint);
-  document.getElementById('addGridPointBtn').addEventListener('click', addNewGridPoint);
+  document.getElementById('deleteSelectedGridPostBtn').addEventListener('click', deleteSelectedGridPost);
+  document.getElementById('addNewGridPostBtn').addEventListener('click', addNewGridPost);
   document.getElementById('resetGridMapBtn').addEventListener('click', resetGridMapToBuiltIn);
   GRID_TOGGLE_BTN_IDS.forEach(id=>{
     const btn = document.getElementById(id);
@@ -3256,6 +3255,8 @@
       document.getElementById('storageWarningBanner').classList.add('show');
     }
     const isFirstTime = await loadState();
+    await syncDateToToday();
+    setInterval(syncDateToToday, 60000);
     if(isFirstTime && storageAvailable) document.getElementById('firstTimeBanner').classList.add('show');
     applyTheme();
     initGridMap();
@@ -3271,18 +3272,6 @@
     renderAddGridButton();
     applyMode();
   })();
-
-  // If the app remains open across midnight, update the survey date automatically.
-  let lastKnownDate = todayStr();
-  setInterval(async ()=>{
-    const currentDate = todayStr();
-    if(!state || currentDate === lastKnownDate) return;
-    lastKnownDate = currentDate;
-    state.meta.date = currentDate;
-    await saveState();
-    renderMetaLine();
-    showToast(`Date updated to ${currentDate}`);
-  }, 60000);
 
 })();
 
