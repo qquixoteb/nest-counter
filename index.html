@@ -271,7 +271,7 @@
 
 <div class="export-row">
   <button class="export-btn" id="exportBtn">⬇ Export</button>
-  <button class="share-btn" id="shareBtn">📤 Share</button>
+  
 </div>
 <button class="new-day-btn" id="newDayBtn">🗓 Start New Day</button>
 <div class="new-day-hint">Clears today's Grid History, Index Log, and Subsequent Sightings — running counts and next-index numbers carry forward untouched</div>
@@ -281,12 +281,16 @@
 
 <div id="nestInventoryModeContent" style="display:none;">
   <div class="log-section">
+    <div class="log-head"><h2>Due for Excavation</h2></div>
+    <div id="dueForExcavationList"></div>
+  </div>
+  <div class="log-section">
     <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
     <div id="nestInventoryList"></div>
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
-    <button class="share-btn" id="shareNestInventoryBtn">📤 Share</button>
+    
   </div>
   <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
@@ -324,7 +328,7 @@
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportBeetleBtn">⬇ Export</button>
-    <button class="share-btn" id="shareBeetleBtn">📤 Share</button>
+    
   </div>
   <button class="new-day-btn" id="clearBeetleBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Transect Log entries on this device</div>
@@ -619,9 +623,9 @@
         <div class="field"><label>Auto-fill grid from GPS</label>
           <select id="editGridAutoFill"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Buzzes the device once when live grid tracking confirms you've moved into a new grid — useful for a heads-up without needing to look at the screen. Requires grid tracking to be running.</div>
-        <div class="field"><label>Buzz on grid change</label>
-          <select id="editGridChangeBuzz"><option value="off">Off (default)</option><option value="on">On</option></select>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Alerts you when live grid tracking confirms you've moved into a new grid — useful without needing to look at the screen. Vibrate needs a recent tap on the screen to work at all (a browser restriction, not something this app controls) — Notify doesn't have that limitation, so it's the more reliable option if you're not actively touching the screen while walking. Requires grid tracking to be running either way.</div>
+        <div class="field"><label>Alert on grid change</label>
+          <select id="editGridChangeAlert"><option value="off">Off (default)</option><option value="vibrate">Vibrate</option><option value="notify">Notify</option><option value="both">Both</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. The grid number auto-fills from live grid tracking and updates as you move — type over it any time to correct it temporarily, but the next confirmed grid change overwrites it again. Whenever the detected grid changes, whatever's tallied so far is automatically saved for the grid you just left, and every counter resets to zero for the new one. Requires grid tracking to be running.</div>
         <div class="field"><label>Continuous tally mode</label>
@@ -637,11 +641,16 @@
             <button type="button" class="copy-btn" id="toggleGridTrackingBtnSettings">▶ Start</button>
           </div>
         </div>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Ships with the current grid post survey built in. Load a newer file here if posts get updated — applies immediately and becomes the new default.</div>
-        <button class="reset-btn" id="updateGridsBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Update Grids</button>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:8px;">Updating one post in the field — select it (or add a new one), stand at it, and capture its GPS point directly. No file needed.</div>
+        <div class="field"><label>Grid post</label>
+          <select id="editGridPointSelect"></select>
+        </div>
+        <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:14px;">📍 Capture Point for This Grid</button>
         <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
+        <button class="reset-btn" id="deleteGridPointBtn" style="border-color: var(--danger); color: var(--danger); margin-bottom: 14px;">
+          🗑 Delete Selected Grid Post
+        </button>
       </div>
-      <input type="file" id="gridMapUpdateInput" accept=".xlsx" style="display:none;">
       <div class="settings-group" style="margin-top:22px;">
         <h3>Backup</h3>
         <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Saves everything — counts, next-index numbers, grid history, index nests, subsequent sightings. Use this to move your season's data to a new copy of this tool (like the hosted version) rather than re-entering it by hand.</div>
@@ -700,7 +709,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeBuzz:false, continuousTallyMode:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -735,7 +744,10 @@
     if(!meta.currentMode) meta.currentMode = 'turtle';
     if(meta.gridAutoFill === undefined || meta.gridAutoFill === null) meta.gridAutoFill = false;
     if(meta.fullBeachRun === undefined || meta.fullBeachRun === null) meta.fullBeachRun = false;
-    if(meta.gridChangeBuzz === undefined || meta.gridChangeBuzz === null) meta.gridChangeBuzz = false;
+    if(!meta.gridChangeAlert){
+      // migrate from the old boolean-only "buzz" setting
+      meta.gridChangeAlert = meta.gridChangeBuzz ? 'vibrate' : 'off';
+    }
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
 
     let species = loaded.species || base.species;
@@ -1046,13 +1058,8 @@
     buildContinuousSpeciesBlocks();
     let gridValue = suggestNextGrid();
     if(gridValue === null) gridValue = '';
-    if(state.meta.gridAutoFill){
-      const prior = getPriorDetectedGrid();
-      if(prior && prior.district === state.meta.district) gridValue = prior.gridNumber;
-    } else {
-      const current = getCurrentDetectedGrid();
-      if(current && current.district === state.meta.district) gridValue = current.gridNumber;
-    }
+    const current = getCurrentDetectedGrid();
+    if(current && current.district === state.meta.district) gridValue = current.gridNumber;
     document.getElementById('ctGridNumber').value = gridValue;
   }
 
@@ -1094,8 +1101,8 @@
       showToast(`Reached the end of ${districtLabel}'s grids — enable Full Beach Run in Settings to continue, or switch district`);
     }
     if(state.meta.gridAutoFill){
-      const prior = getPriorDetectedGrid();
-      if(prior && prior.district === state.meta.district) gridValue = prior.gridNumber;
+      const liveGrid = getLiveAutoFillGrid();
+      if(liveGrid !== null) gridValue = liveGrid;
     }
     document.getElementById('gtGridNumber').value = gridValue;
     const speciesBlocksEl = document.getElementById('gtSpeciesBlocks');
@@ -1351,7 +1358,52 @@
   // post only marks its start, so a grid's real-world extent is the segment between
   // it and the next consecutively-numbered post.
   const BAKED_IN_GRID_ROWS = [
-    [-80.7351419515908,28.7941389810294,"GD45"],
+    [-80.8302908856422,28.9385450072587,"GD0"],
+    [-80.8289459254593,28.9366119727492,"GD1"],
+    [-80.82723794505,28.9341559913009,"GD2"],
+    [-80.8252219296992,28.9312789868563,"GD3"],
+    [-80.8230999670923,28.9281400479376,"GD4"],
+    [-80.8209779206663,28.925070008263,"GD5"],
+    [-80.8184069395065,28.9213210344315,"GD6"],
+    [-80.8165189158171,28.918484011665,"GD7"],
+    [-80.8142148982733,28.9150969684124,"GD8"],
+    [-80.8119059354067,28.9116870425642,"GD9"],
+    [-80.8097179234028,28.908465038985,"GD10"],
+    [-80.8075749222189,28.9053890481591,"GD11"],
+    [-80.8061919081956,28.9034180436283,"GD12"],
+    [-80.8038999605924,28.9000310003757,"GD13"],
+    [-80.8010398875922,28.8958859816194,"GD14"],
+    [-80.7985269092023,28.8921550288796,"GD15"],
+    [-80.7966639474034,28.8893989752978,"GD16"],
+    [-80.7950649317354,28.8870279863477,"GD17"],
+    [-80.7931819371879,28.8842410035431,"GD18"],
+    [-80.7911618985236,28.8812810182571,"GD19"],
+    [-80.7893459592015,28.8785190135241,"GD20"],
+    [-80.7859419006854,28.8733900431544,"GD21"],
+    [-80.7847059052438,28.8715180289,"GD22"],
+    [-80.7831439375877,28.8691190443933,"GD23"],
+    [-80.7799339201301,28.8641909882426,"GD24"],
+    [-80.7787619624287,28.8622899726033,"GD25"],
+    [-80.7767449412495,28.8591050170362,"GD26"],
+    [-80.7741709426045,28.8550090324134,"GD27"],
+    [-80.771975889802,28.8515580352396,"GD28"],
+    [-80.7698939088732,28.84831096977,"GD29"],
+    [-80.7677478902042,28.8449049834162,"GD30"],
+    [-80.7659599464387,28.8420470058918,"GD31"],
+    [-80.763584934175,28.8384179770947,"GD32"],
+    [-80.7618508860469,28.8356080278754,"GD33"],
+    [-80.7579268980771,28.8292409665883,"GD34"],
+    [-80.7556388899684,28.8255940005183,"GD35"],
+    [-80.7538428995758,28.8227400463074,"GD36"],
+    [-80.7517789397389,28.8193540088832,"GD37"],
+    [-80.7497989665717,28.8161750044674,"GD38"],
+    [-80.7476759143174,28.8129560183734,"GD39"],
+    [-80.7456179056317,28.809899976477,"GD40"],
+    [-80.7437369227409,28.8069930486381,"GD41"],
+    [-80.7416529301554,28.8037899881601,"GD42"],
+    [-80.739119919017,28.8000000268221,"GD43"],
+    [-80.7372379302979,28.797216983512,"GD44"],
+    [-80.7351449271664,28.7941210018471,"GD45"],
     [-80.7331458851695,28.7910520099103,"GD46"],
     [-80.7310149539262,28.7880920246243,"GD47"],
     [-80.728870946914,28.7848380021751,"GD48"],
@@ -1372,16 +1424,16 @@
     [-80.6962259486318,28.7385699804872,"GD63"],
     [-80.6937479227781,28.735278993845,"GD64"],
     [-80.6910098902881,28.7319269869477,"GD65"],
-    [-80.6840638909489,28.7230020202696,"GD68"],
-    [-80.6864919606596,28.7259930185974,"GD67"],
     [-80.6887299288064,28.7289499863982,"GD66"],
+    [-80.6864919606596,28.7259930185974,"GD67"],
+    [-80.6840638909489,28.7230020202696,"GD68"],
     [-80.6808779295534,28.7189580034465,"GD69"],
     [-80.6789209228009,28.7165219709277,"GD70"],
     [-80.676666945219,28.713879995048,"GD71"],
     [-80.6744069326669,28.7112110294402,"GD72"],
     [-80.6709719449282,28.7071779929101,"GD73"],
-    [-80.666224937886,28.7013529893011,"GD75"],
     [-80.668563907966,28.7041090428829,"GD74"],
+    [-80.666224937886,28.7013529893011,"GD75"],
     [-80.663782954216,28.698043981567,"GD76"],
     [-80.6617519352585,28.6953500378877,"GD77"],
     [-80.6593309063464,28.6920929979533,"GD78"],
@@ -1400,58 +1452,10 @@
     [-80.630469918251,28.6535440385342,"GD91"],
     [-80.628352900967,28.6502279900014,"GD92"],
     [-80.6262039486319,28.647131966427,"GD93"],
-    [-80.6249649357051,28.6453010234982,"GD94"],
-    [-80.8302908856422,28.9385450072587,"GRID00"],
-    [-80.8289459254593,28.9366119727492,"GRID01"],
-    [-80.82723794505,28.9341559913009,"GRID02"],
-    [-80.8252219296992,28.9312789868563,"GRID03"],
-    [-80.8230999670923,28.9281400479376,"GRID04"],
-    [-80.8209779206663,28.925070008263,"GRID05"],
-    [-80.8184069395065,28.9213210344315,"GRID06"],
-    [-80.8165189158171,28.918484011665,"GRID07"],
-    [-80.8142148982733,28.9150969684124,"GRID08"],
-    [-80.8119059354067,28.9116870425642,"GRID09"],
-    [-80.8097179234028,28.908465038985,"GRID10"],
-    [-80.8075749222189,28.9053890481591,"GRID11"],
-    [-80.8061919081956,28.9034180436283,"GRID12"],
-    [-80.8038999605924,28.9000310003757,"GRID13"],
-    [-80.8010398875922,28.8958859816194,"GRID14"],
-    [-80.7985269092023,28.8921550288796,"GRID15"],
-    [-80.7966639474034,28.8893989752978,"GRID16"],
-    [-80.7950649317354,28.8870279863477,"GRID17"],
-    [-80.7931819371879,28.8842410035431,"GRID18"],
-    [-80.7911618985236,28.8812810182571,"GRID19"],
-    [-80.7893459592015,28.8785190135241,"GRID20"],
-    [-80.7859419006854,28.8733900431544,"GRID21"],
-    [-80.7847059052438,28.8715180289,"GRID22"],
-    [-80.7831439375877,28.8691190443933,"GRID23"],
-    [-80.7799339201301,28.8641909882426,"GRID24"],
-    [-80.7787619624287,28.8622899726033,"GRID25"],
-    [-80.7767449412495,28.8591050170362,"GRID26"],
-    [-80.7741709426045,28.8550090324134,"GRID27"],
-    [-80.771975889802,28.8515580352396,"GRID28"],
-    [-80.7698939088732,28.84831096977,"GRID29"],
-    [-80.7677478902042,28.8449049834162,"GRID30"],
-    [-80.7659599464387,28.8420470058918,"GRID31"],
-    [-80.763584934175,28.8384179770947,"GRID32"],
-    [-80.7618508860469,28.8356080278754,"GRID33"],
-    [-80.7579268980771,28.8292409665883,"GRID34"],
-    [-80.7556388899684,28.8255940005183,"GRID35"],
-    [-80.7538428995758,28.8227400463074,"GRID36"],
-    [-80.7517789397389,28.8193540088832,"GRID37"],
-    [-80.7497989665717,28.8161750044674,"GRID38"],
-    [-80.7476759143174,28.8129560183734,"GRID39"],
-    [-80.7456179056317,28.809899976477,"GRID40"],
-    [-80.7437369227409,28.8069930486381,"GRID41"],
-    [-80.7416529301554,28.8037899881601,"GRID42"],
-    [-80.739119919017,28.8000000268221,"GRID43"],
-    [-80.7372379302979,28.797216983512,"GRID44"],
-    [-80.735147902742,28.7941030226648,"GRID45"]
+    [-80.6249649357051,28.6453010234982,"GD94"]
   ];
   let gridMapSegments = null;
   let gridWatchId = null;
-  const GRID_PREFIX_DISTRICT = { GRID:'apollo', GD:'playalinda' };
-
   function loadGridMapFromRows(rows, labelIdx){
     if(labelIdx===undefined) labelIdx = 6; // uploaded xlsx rows: lon,lat,...,label at index 6
     const byPrefix = {};
@@ -1460,20 +1464,21 @@
       const lon = row[0], lat = row[1], label = row[labelIdx];
       if(typeof lon!=='number' || typeof lat!=='number' || !label) return;
       const m = /^([A-Za-z]+)(\d+)$/.exec(String(label).trim());
-      if(!m) return;
+      if(!m){ skippedUnknownPrefix++; return; }
       const prefix = m[1], num = parseInt(m[2],10);
-      if(!GRID_PREFIX_DISTRICT[prefix]){ skippedUnknownPrefix++; return; }
       if(!byPrefix[prefix]) byPrefix[prefix] = [];
       byPrefix[prefix].push({num, lat, lon});
     });
 
+    // District is determined by the grid NUMBER (0-44 Apollo, 45+ Playalinda), not
+    // by label prefix — grid posts are now uniformly labeled GD<number> throughout,
+    // so prefix alone can no longer distinguish districts the way it briefly could.
     const segments = [];
     Object.keys(byPrefix).forEach(prefix=>{
-      const district = GRID_PREFIX_DISTRICT[prefix];
       const pts = byPrefix[prefix].sort((a,b)=>a.num-b.num);
       for(let i=0;i<pts.length-1;i++){
         segments.push({
-          district, gridNumber: pts[i].num,
+          district: districtForGrid(pts[i].num), gridNumber: pts[i].num,
           lat1: pts[i].lat, lon1: pts[i].lon,
           lat2: pts[i+1].lat, lon2: pts[i+1].lon
         });
@@ -1518,24 +1523,57 @@
     }
   }
 
-  async function handleGridMapUpdateFile(e){
-    const file = e.target.files[0];
-    e.target.value = '';
-    if(!file) return;
-    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
-    try{
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, {type:'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
-      const ok = activateGridSegments(rows, 6, 'Updated grid map');
-      if(!ok) return;
-      state.gridMapOverride = rows;
-      const saved = await saveState();
-      showToast(saved ? 'Grid map updated and saved' : 'Applied for this session — save FAILED, check storage');
-    }catch(err){
-      showToast('Could not read that file — check it matches the expected format');
+  // Returns the currently active grid map data, always normalized to [lon, lat,
+  // label] — used by the grid-point select/capture flow regardless of whether the
+  // active source is the built-in survey or a stored override.
+  function getActiveGridRowsNormalized(){
+    if(state.gridMapOverride && state.gridMapOverride.length) return state.gridMapOverride;
+    return BAKED_IN_GRID_ROWS;
+  }
+
+  function populateGridPointSelect(){
+    const sel = document.getElementById('editGridPointSelect');
+    if(!sel) return;
+    const rows = getActiveGridRowsNormalized();
+    const labels = rows.map(r => r[2]).filter(Boolean).sort((a,b)=>{
+      const pa = a.match(/^([A-Za-z]+)(\d+)$/), pb = b.match(/^([A-Za-z]+)(\d+)$/);
+      if(pa && pb && pa[1]===pb[1]) return parseInt(pa[2],10)-parseInt(pb[2],10);
+      return a.localeCompare(b);
+    });
+    sel.innerHTML = labels.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('')
+      + `<option value="__add_new__">+ Add new grid post…</option>`;
+  }
+
+  async function captureGridPoint(){
+    const sel = document.getElementById('editGridPointSelect');
+    let label = sel.value;
+    if(label === '__add_new__'){
+      const input = prompt('New grid post label, matching the existing naming (e.g. GRID47 or GD62):');
+      if(!input) return;
+      label = input.trim();
+      if(!/^[A-Za-z]+\d+$/.test(label)){
+        showToast('Label must be a letter prefix followed by a number, e.g. GRID47');
+        return;
+      }
     }
+    if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
+    showToast('Capturing point…');
+    navigator.geolocation.getCurrentPosition(
+      async (pos)=>{
+        const rows = getActiveGridRowsNormalized().slice(); // copy — never mutate BAKED_IN_GRID_ROWS in place
+        const idx = rows.findIndex(r => r[2] === label);
+        const newRow = [pos.coords.longitude, pos.coords.latitude, label];
+        if(idx >= 0) rows[idx] = newRow; else rows.push(newRow);
+        state.gridMapOverride = rows;
+        const saved = await saveState();
+        activateGridSegments(state.gridMapOverride, 2, 'Updated grid map');
+        populateGridPointSelect();
+        document.getElementById('editGridPointSelect').value = label;
+        showToast(saved ? `Point captured for ${label}` : `Captured for ${label} — save FAILED, check storage`);
+      },
+      (err)=> showToast('GPS error — check permissions, try again'),
+      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+    );
   }
 
   async function resetGridMapToBuiltIn(){
@@ -1543,10 +1581,24 @@
     state.gridMapOverride = null;
     const saved = await saveState();
     activateGridSegments(BAKED_IN_GRID_ROWS, 2, 'Built-in grid map');
+    populateGridPointSelect();
     showToast(saved ? 'Reset to built-in grid map' : 'Reset locally — save FAILED, check storage');
   }
 
-  // Closest point on a grid segment to the observer, using a local flat-meter
+  
+
+function deleteGridPoint() {
+  const sel = document.getElementById('editGridPointSelect');
+  const label = sel && sel.value;
+  if (!label || label === "__add_new__") { showToast('Select a valid grid post first'); return; }
+  if (!state.gridMapOverride || !state.gridMapOverride.length) { showToast('Cannot delete: using built-in grid map'); return; }
+  if (!confirm(`Delete grid post "${label}"? This cannot be undone.`)) return;
+  state.gridMapOverride = state.gridMapOverride.filter(r => r[2] !== label);
+  const ok = await saveState();
+  populateGridPointSelect();
+  if (ok) showToast(`Deleted grid post ${label}`); else showToast('Deleted locally — save FAILED');
+}
+// Closest point on a grid segment to the observer, using a local flat-meter
   // approximation centered on the observer — accurate enough at this scale (a few km),
   // and simpler/faster than true great-circle segment math.
   function findNearestGridSegment(lat, lon){
@@ -1591,20 +1643,66 @@
       pendingGridCandidate = {district: result.district, gridNumber: result.gridNumber, count: 1};
     }
     if(pendingGridCandidate.count >= GRID_DEBOUNCE_READINGS){
-      const hadPriorGrid = detectedGridHistory.length > 0; // don't buzz/commit on the very first detection, only on real changes
+      const hadPriorGrid = detectedGridHistory.length > 0; // don't alert/commit on the very first detection, only on real changes
       const previousConfirmed = detectedGridHistory[0]; // capture before unshift, for continuous-tally auto-commit
       detectedGridHistory.unshift({district: pendingGridCandidate.district, gridNumber: pendingGridCandidate.gridNumber});
       if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
       const newGridNumber = pendingGridCandidate.gridNumber;
+      const newDistrict = pendingGridCandidate.district;
       pendingGridCandidate = null;
-      if(hadPriorGrid && state.meta.gridChangeBuzz && navigator.vibrate) navigator.vibrate(200);
+      if(hadPriorGrid){
+        const alertMode = state.meta.gridChangeAlert;
+        if((alertMode==='vibrate' || alertMode==='both') && navigator.vibrate) navigator.vibrate([400, 120, 400]);
+        if(alertMode==='notify' || alertMode==='both') showGridChangeNotification(newGridNumber, newDistrict);
+      }
       if(hadPriorGrid && state.meta.continuousTallyMode && state.meta.currentMode==='turtle'){
         commitContinuousTally(previousConfirmed.gridNumber, newGridNumber);
       }
     }
   }
   function getCurrentDetectedGrid(){ return detectedGridHistory[0] || null; }
-  function getPriorDetectedGrid(){ return detectedGridHistory[1] || detectedGridHistory[0] || null; }
+
+  // Requests Notification permission, triggered by a direct user action (saving
+  // Settings) as browsers require. Returns whether permission ended up granted.
+  async function requestNotificationPermissionIfNeeded(){
+    if(!('Notification' in window)) return false;
+    if(Notification.permission === 'granted') return true;
+    if(Notification.permission === 'denied') return false;
+    try{
+      const result = await Notification.requestPermission();
+      return result === 'granted';
+    }catch(err){
+      return false;
+    }
+  }
+
+  // Shown via the service worker rather than the plain Notification constructor —
+  // more reliable for an installed PWA. Uses a fixed tag so a new grid-change
+  // notification replaces the last one instead of piling up while walking.
+  function showGridChangeNotification(gridNumber, district){
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;
+    if(!navigator.serviceWorker || !navigator.serviceWorker.ready) return;
+    const districtLabel = district==='playalinda' ? 'Playalinda' : 'Apollo';
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.showNotification('Grid changed', {
+        body: `Now in Grid ${gridNumber} — ${districtLabel}`,
+        tag: 'grid-change',
+        silent: false
+      });
+    }).catch(()=>{});
+  }
+
+  // Simple, stateless auto-fill: the grid you were likely just in, computed directly
+  // from the CURRENT confirmed live position ± 1 (direction depends on which way this
+  // district is walked — Apollo counts up so the prior grid is one lower, Playalinda
+  // counts down so it's one higher). Deliberately not history/tracking-based — that
+  // approach is what caused the skipped-grid bug when a grid was passed without a tally.
+  function getLiveAutoFillGrid(){
+    const current = getCurrentDetectedGrid();
+    if(!current || current.district !== state.meta.district) return null;
+    const offset = state.meta.district === 'playalinda' ? 1 : -1;
+    return current.gridNumber + offset;
+  }
 
   function renderGridLiveResult(result, accuracy, errorText){
     let text;
@@ -1966,8 +2064,26 @@
       ...fields
     };
     state.indexLog.unshift(entry);
+    // Auto-track this index nest in Nest Inventory too, so it shows up in the "Due
+    // for Excavation" list once its species' incubation period has elapsed. Skipped
+    // if a matching entry already exists, to avoid duplicates.
+    if(nestNumber){
+      const alreadyTracked = state.nestInventory.some(ni =>
+        ni.speciesLabel === speciesLabel && String(ni.nestNumber) === String(nestNumber) && String(ni.grid) === String(entry.grid)
+      );
+      if(!alreadyTracked){
+        state.nestInventory.unshift({
+          id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+          grid: entry.grid, speciesId, speciesLabel, nestNumber,
+          hatchLive:0, hatchDead:0, emptyShells:0, pippedDead:0, pippedLive:0, wholeEggs:0, damaged:0,
+          comment: '', district: entry.district, ts: entry.ts
+        });
+      }
+    }
     const ok = await saveState();
     renderLog();
+    renderNestInventory();
+    renderDueForExcavation();
     const wasManual = manualEntryMode;
     pendingCapture = null;
     manualEntryMode = false;
@@ -2120,6 +2236,7 @@
     }
     const ok = await saveState();
     renderNestInventory();
+    renderDueForExcavation();
     closeNestInventoryModal();
     if(!ok){ showToast('Save FAILED — try again'); return; }
     showToast('Nest inventory saved');
@@ -2131,8 +2248,45 @@
     state.nestInventory = state.nestInventory.filter(e=>e.id!==editingNestInventoryId);
     await saveState();
     renderNestInventory();
+    renderDueForExcavation();
     closeNestInventoryModal();
     showToast('Entry deleted');
+  }
+
+  // Sea turtle incubation periods (days) by species, used to flag nests as due for
+  // excavation. Species without a known period (rare/"other" sightings) are excluded
+  // rather than guessed.
+  const INCUBATION_DAYS = { loggerhead: 70, green: 70, leatherback: 90, kemps: 60 };
+
+  function getNestsDueForExcavation(){
+    const now = Date.now();
+    return state.nestInventory
+      .filter(e => e.speciesId && INCUBATION_DAYS[e.speciesId])
+      .filter(e => !(e.hatchLive||e.hatchDead||e.emptyShells||e.pippedDead||e.pippedLive||e.wholeEggs||e.damaged)) // not yet excavated
+      .map(e=>{
+        const daysSince = Math.floor((now - new Date(e.ts).getTime()) / 86400000);
+        return Object.assign({}, e, {daysSince, daysOverdue: daysSince - INCUBATION_DAYS[e.speciesId]});
+      })
+      .filter(e => e.daysOverdue >= 0)
+      .sort((a,b) => b.daysOverdue - a.daysOverdue);
+  }
+
+  function renderDueForExcavation(){
+    const wrap = document.getElementById('dueForExcavationList');
+    if(!wrap) return;
+    const due = getNestsDueForExcavation();
+    if(due.length===0){ wrap.innerHTML = '<div class="log-empty">No nests due for excavation yet.</div>'; return; }
+    wrap.innerHTML = due.map(e=>{
+      const overdueText = e.daysOverdue===0 ? 'Due today' : `${e.daysOverdue} day(s) overdue`;
+      return `<div class="log-item">
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:600;color:var(--live-red);font-size:11px;">${overdueText}</span></div>
+        <div class="log-item-meta">Grid ${escapeHtml(String(e.grid))} · Logged ${e.daysSince} day(s) ago</div>
+        <button class="log-item-edit" data-id="${e.id}">Excavate</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
+      b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
+    });
   }
 
   function renderNestInventory(){
@@ -2155,6 +2309,7 @@
       b.addEventListener('click', async ()=>{
         state.nestInventory = state.nestInventory.filter(x=>x.id!==b.dataset.id);
         await saveState(); renderNestInventory();
+    renderDueForExcavation();
       });
     });
   }
@@ -2192,17 +2347,14 @@
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  function shareNestInventory(){
-    const built = buildNestInventoryWorkbook();
-    if(!built) return;
-    shareWorkbook(built.wb, built.filename);
-  }
+  
 
   async function clearNestInventory(){
     if(!confirm("Clear today's Nest Inventory entries? This cannot be undone.")) return;
     state.nestInventory = [];
     const ok = await saveState();
     renderNestInventory();
+    renderDueForExcavation();
     if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
     showToast('Nest Inventory cleared');
   }
@@ -2363,11 +2515,7 @@
     catch(e){ showToast('Export failed — try again'); }
   }
 
-  function shareBeetle(){
-    const built = buildBeetleWorkbook();
-    if(!built) return;
-    shareWorkbook(built.wb, built.filename);
-  }
+  
 
   async function clearBeetle(){
     if(!confirm("Clear today's Transect Log entries? This cannot be undone.")) return;
@@ -2565,8 +2713,9 @@
     document.getElementById('editLightMode').value = state.meta.lightMode ? 'light' : 'dark';
     document.getElementById('editGridAutoFill').value = state.meta.gridAutoFill ? 'on' : 'off';
     document.getElementById('editFullBeachRun').value = state.meta.fullBeachRun ? 'on' : 'off';
-    document.getElementById('editGridChangeBuzz').value = state.meta.gridChangeBuzz ? 'on' : 'off';
+    document.getElementById('editGridChangeAlert').value = state.meta.gridChangeAlert || 'off';
     document.getElementById('editContinuousTallyMode').value = state.meta.continuousTallyMode ? 'on' : 'off';
+    populateGridPointSelect();
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
   }
@@ -2583,7 +2732,18 @@
     state.meta.lightMode = document.getElementById('editLightMode').value === 'light';
     state.meta.gridAutoFill = document.getElementById('editGridAutoFill').value === 'on';
     state.meta.fullBeachRun = document.getElementById('editFullBeachRun').value === 'on';
-    state.meta.gridChangeBuzz = document.getElementById('editGridChangeBuzz').value === 'on';
+    const selectedAlertMode = document.getElementById('editGridChangeAlert').value;
+    if((selectedAlertMode==='notify' || selectedAlertMode==='both') && (!('Notification' in window) || Notification.permission!=='granted')){
+      const granted = await requestNotificationPermissionIfNeeded();
+      if(!granted){
+        showToast('Notification permission denied — using Vibrate instead');
+        state.meta.gridChangeAlert = selectedAlertMode==='both' ? 'vibrate' : 'off';
+      } else {
+        state.meta.gridChangeAlert = selectedAlertMode;
+      }
+    } else {
+      state.meta.gridChangeAlert = selectedAlertMode;
+    }
     state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
@@ -2612,7 +2772,7 @@
     initGridMap();
     applyMode();
     renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
-    renderNestInventory(); renderBeetleLog();
+    renderNestInventory(); renderDueForExcavation(); renderBeetleLog();
     closeSettings();
     showToast('Reset complete');
   }
@@ -2652,7 +2812,7 @@
       initGridMap();
       applyMode();
       renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
-      renderNestInventory(); renderBeetleLog();
+      renderNestInventory(); renderDueForExcavation(); renderBeetleLog();
       if(!ok){ showToast('Imported locally — save FAILED, check storage'); return; }
       showToast('Backup imported');
     }catch(err){
@@ -2736,8 +2896,7 @@
   // downloading it — lets the person pick OneDrive, email, etc. directly.
   // Cancelling the share sheet throws AbortError, which is a normal choice,
   // not a failure, so it's deliberately silent.
-  async function shareWorkbook(wb, filename){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+  
     if(!navigator.share){ showToast("Sharing isn't supported on this browser — use Export instead"); return; }
     try{
       const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
@@ -2953,11 +3112,6 @@
     try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
     catch(e){ showToast('Export failed — try again'); }
   }
-
-  function shareExcel(){
-    if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
-    const built = buildTurtleWorkbook();
-    shareWorkbook(built.wb, built.filename);
   }
 
   // ---------- wire up ----------
@@ -3004,9 +3158,9 @@
   document.getElementById('captureCancel').addEventListener('click', closeCaptureModal);
   document.getElementById('captureSave').addEventListener('click', saveCapture);
   document.getElementById('gpsCaptureBtn').addEventListener('click', attemptGeolocation);
-  document.getElementById('updateGridsBtn').addEventListener('click', ()=>document.getElementById('gridMapUpdateInput').click());
-  document.getElementById('gridMapUpdateInput').addEventListener('change', handleGridMapUpdateFile);
+  document.getElementById('captureGridPointBtn').addEventListener('click', captureGridPoint);
   document.getElementById('resetGridMapBtn').addEventListener('click', resetGridMapToBuiltIn);
+  document.getElementById('deleteGridPointBtn').addEventListener('click', deleteGridPoint);
   GRID_TOGGLE_BTN_IDS.forEach(id=>{
     const btn = document.getElementById(id);
     if(btn) btn.addEventListener('click', toggleGridTracking);
@@ -3047,7 +3201,7 @@
     document.getElementById(id).addEventListener('input', updateNiTotalClutch);
   });
   document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
-  document.getElementById('shareNestInventoryBtn').addEventListener('click', shareNestInventory);
+  
   document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
 
   // Tiger Beetle wiring
@@ -3077,10 +3231,10 @@
     });
   });
   document.getElementById('exportBeetleBtn').addEventListener('click', exportBeetle);
-  document.getElementById('shareBeetleBtn').addEventListener('click', shareBeetle);
+  
   document.getElementById('clearBeetleBtn').addEventListener('click', clearBeetle);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
-  document.getElementById('shareBtn').addEventListener('click', shareExcel);
+  
   document.getElementById('newDayBtn').addEventListener('click', startNewDay);
   document.getElementById('deleteLatestGridBtn').addEventListener('click', deleteLatestGrid);
   document.getElementById('gtGridMinus').addEventListener('click', ()=>{
@@ -3111,6 +3265,9 @@
       document.getElementById('storageWarningBanner').classList.add('show');
     }
     const isFirstTime = await loadState();
+    // Option A: always set date to today on load
+    state.meta.date = todayStr();
+    await saveState();
     if(isFirstTime && storageAvailable) document.getElementById('firstTimeBanner').classList.add('show');
     applyTheme();
     initGridMap();
@@ -3121,6 +3278,7 @@
     renderLog();
     renderSubsequent();
     renderNestInventory();
+    renderDueForExcavation();
     renderBeetleLog();
     renderAddGridButton();
     applyMode();
