@@ -154,6 +154,19 @@
   .step-value.type-nest{ background:#6EE080; border-color:#6EE080; color:#0A2810; }
   .step-value.type-pred{ background:#F26B5E; border-color:#F26B5E; color:#2A0805; }
 
+  /* Big Button Mode — only applies above 600px width, so it never fires on a phone
+     screen (where the existing narrow-phone stacking already handles the 5-across
+     tally layout). A tablet-only accessibility option, not a general size increase. */
+  @media (min-width: 600px){
+    body.big-buttons .tally-fields{ gap:9px; }
+    body.big-buttons .step-btn{ width:42px; height:42px; font-size:22px; border-radius:8px; }
+    body.big-buttons .step-value{ width:40px; font-size:19px; padding:11px 2px; border-radius:8px; }
+    body.big-buttons .tally-field label{ font-size:13px; }
+    body.big-buttons .tally-species-name{ font-size:16px; }
+    body.big-buttons #gtGridNumber, body.big-buttons #ctGridNumber{ font-size:22px !important; padding:15px 8px !important; }
+    body.big-buttons #addGridBtn{ font-size:18px; padding:20px; }
+  }
+
   /* Tiger Beetle tally — only 2 fields, not 5, so no need to cram them small like
      the turtle grid tally above. Sized generously, and deliberately NOT using the
      .tally-fields/.step-btn classes so the phone-width media query for that
@@ -279,12 +292,16 @@
 
 <div id="nestInventoryModeContent" style="display:none;">
   <div class="log-section">
-    <div class="log-head"><h2>Due for Excavation</h2></div>
+    <div class="log-head"><h2>Due for Excavation</h2><button class="copy-btn" id="addDueNestBtn">+ Add</button></div>
     <div id="dueForExcavationList"></div>
   </div>
   <div class="log-section">
     <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
     <div id="nestInventoryList"></div>
+  </div>
+  <div class="log-section">
+    <div class="log-head"><h2>Not Yet Due</h2><button class="copy-btn" id="addWaitingNestBtn">+ Add</button></div>
+    <div id="nestsWaitingList"></div>
   </div>
   <div class="export-row">
     <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
@@ -556,6 +573,11 @@
     </div>
     <div class="field" id="niOtherNameWrap" style="display:none;"><label>Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
     <div class="field"><label>Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
+    <button type="button" class="btn btn-secondary" id="niGpsCaptureBtn" style="width:100%; margin-bottom:8px;">📍 Capture GPS Point</button>
+    <div class="coord-row">
+      <div class="field"><label>Latitude</label><input type="text" id="niLat" inputmode="decimal" placeholder="—"></div>
+      <div class="field"><label>Longitude</label><input type="text" id="niLon" inputmode="decimal" placeholder="—"></div>
+    </div>
     <div class="field"><label>Hatchling Live</label><input type="number" id="niHatchLive" inputmode="numeric" min="0" value="0"></div>
     <div class="field"><label>Hatchling Dead</label><input type="number" id="niHatchDead" inputmode="numeric" min="0" value="0"></div>
     <div class="field"><label>Empty Shells</label><input type="number" id="niEmptyShells" inputmode="numeric" min="0" value="0"></div>
@@ -626,6 +648,10 @@
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. The grid number auto-fills from live grid tracking and updates as you move — type over it any time to correct it temporarily, but the next confirmed grid change overwrites it again. Whenever the detected grid changes, whatever's tallied so far is automatically saved for the grid you just left, and every counter resets to zero for the new one. Requires grid tracking to be running.</div>
         <div class="field"><label>Continuous tally mode</label>
           <select id="editContinuousTallyMode"><option value="off">Off (default)</option><option value="on">On</option></select>
+        </div>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Makes the tally steppers, labels, and grid number field bigger on the Add Grid Tally form. Only takes effect on a large tablet screen — never shrinks or crowds things on a phone.</div>
+        <div class="field"><label>Big button mode</label>
+          <select id="editBigButtonMode"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
       </div>
       <div class="settings-group" style="margin-top:22px;">
@@ -713,7 +739,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -753,6 +779,7 @@
       meta.gridChangeAlert = meta.gridChangeBuzz ? 'vibrate' : 'off';
     }
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
+    if(meta.bigButtonMode === undefined || meta.bigButtonMode === null) meta.bigButtonMode = false;
 
     let species = loaded.species || base.species;
     if(!species.apollo && !species.playalinda){
@@ -779,7 +806,10 @@
   }
 
   function currentSpecies(){ return state.species[state.meta.district]; }
-  function applyTheme(){ document.body.classList.toggle('light-mode', !!state.meta.lightMode); }
+  function applyTheme(){
+    document.body.classList.toggle('light-mode', !!state.meta.lightMode);
+    document.body.classList.toggle('big-buttons', !!state.meta.bigButtonMode);
+  }
 
   // ---------- survey mode switching ----------
   const SURVEY_MODES = [
@@ -2088,8 +2118,9 @@
         state.nestInventory.unshift({
           id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
           grid: entry.grid, speciesId, speciesLabel, nestNumber,
+          lat: entry.lat || '', lon: entry.lon || '',
           hatchLive:0, hatchDead:0, emptyShells:0, pippedDead:0, pippedLive:0, wholeEggs:0, damaged:0,
-          comment: '', district: entry.district, ts: entry.ts
+          comment: '', district: entry.district, ts: entry.ts, fromIndexNest: true
         });
       }
     }
@@ -2097,6 +2128,7 @@
     renderLog();
     renderNestInventory();
     renderDueForExcavation();
+    renderNestsWaiting();
     const wasManual = manualEntryMode;
     pendingCapture = null;
     manualEntryMode = false;
@@ -2165,6 +2197,20 @@
     return total;
   }
 
+  function captureNiGpsPoint(){
+    if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
+    showToast('Capturing point…');
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        document.getElementById('niLat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('niLon').value = pos.coords.longitude.toFixed(6);
+        showToast(`Located (±${Math.round(pos.coords.accuracy)}m)`);
+      },
+      ()=> showToast('GPS error — check permissions, try again'),
+      {enableHighAccuracy:true, timeout:15000}
+    );
+  }
+
   function openNestInventory(){
     editingNestInventoryId = null;
     document.getElementById('nestInventoryTitle').textContent = 'Add Nest Inventory';
@@ -2173,6 +2219,8 @@
     document.getElementById('niOtherNameWrap').style.display = 'none';
     document.getElementById('niOtherName').value = '';
     document.getElementById('niNestNumber').value = '';
+    document.getElementById('niLat').value = '';
+    document.getElementById('niLon').value = '';
     ['niHatchLive','niHatchDead','niEmptyShells','niPippedDead','niPippedLive','niWholeEggs','niDamaged'].forEach(id=>{
       document.getElementById(id).value = 0;
     });
@@ -2198,6 +2246,8 @@
       document.getElementById('niOtherName').value = entry.speciesLabel || '';
     }
     document.getElementById('niNestNumber').value = entry.nestNumber || '';
+    document.getElementById('niLat').value = entry.lat || '';
+    document.getElementById('niLon').value = entry.lon || '';
     document.getElementById('niHatchLive').value = entry.hatchLive || 0;
     document.getElementById('niHatchDead').value = entry.hatchDead || 0;
     document.getElementById('niEmptyShells').value = entry.emptyShells || 0;
@@ -2235,6 +2285,8 @@
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const fields = {
       grid, speciesId, speciesLabel, nestNumber,
+      lat: document.getElementById('niLat').value.trim(),
+      lon: document.getElementById('niLon').value.trim(),
       hatchLive: v('niHatchLive'), hatchDead: v('niHatchDead'),
       emptyShells: v('niEmptyShells'), pippedDead: v('niPippedDead'), pippedLive: v('niPippedLive'),
       wholeEggs: v('niWholeEggs'), damaged: v('niDamaged'),
@@ -2250,6 +2302,7 @@
     const ok = await saveState();
     renderNestInventory();
     renderDueForExcavation();
+    renderNestsWaiting();
     closeNestInventoryModal();
     if(!ok){ showToast('Save FAILED — try again'); return; }
     showToast('Nest inventory saved');
@@ -2262,6 +2315,7 @@
     await saveState();
     renderNestInventory();
     renderDueForExcavation();
+    renderNestsWaiting();
     closeNestInventoryModal();
     showToast('Entry deleted');
   }
@@ -2271,17 +2325,79 @@
   // rather than guessed.
   const INCUBATION_DAYS = { loggerhead: 70, green: 70, leatherback: 90, kemps: 60 };
 
+  function isNiExcavated(e){
+    return !!(e.hatchLive||e.hatchDead||e.emptyShells||e.pippedDead||e.pippedLive||e.wholeEggs||e.damaged);
+  }
+  function niHasKnownIncubation(e){
+    return !!(e.speciesId && INCUBATION_DAYS[e.speciesId]);
+  }
+  function niGpsLine(e){
+    return (e.lat && e.lon) ? ` · ${e.lat}, ${e.lon}` : '';
+  }
+
   function getNestsDueForExcavation(){
     const now = Date.now();
     return state.nestInventory
-      .filter(e => e.speciesId && INCUBATION_DAYS[e.speciesId])
-      .filter(e => !(e.hatchLive||e.hatchDead||e.emptyShells||e.pippedDead||e.pippedLive||e.wholeEggs||e.damaged)) // not yet excavated
+      .filter(niHasKnownIncubation)
+      .filter(e => !isNiExcavated(e))
       .map(e=>{
         const daysSince = Math.floor((now - new Date(e.ts).getTime()) / 86400000);
         return Object.assign({}, e, {daysSince, daysOverdue: daysSince - INCUBATION_DAYS[e.speciesId]});
       })
       .filter(e => e.daysOverdue >= 0)
       .sort((a,b) => b.daysOverdue - a.daysOverdue);
+  }
+
+  // The "waiting" list: index-tracked (or manually added) nests with a known
+  // incubation period that haven't been excavated yet AND haven't reached their due
+  // date. This is the "nest inventory list that waits until the right time" — every
+  // index nest lands here first, then moves itself into Due for Excavation once its
+  // incubation period elapses (no action needed, just time passing).
+  function getNestsWaiting(){
+    const now = Date.now();
+    return state.nestInventory
+      .filter(niHasKnownIncubation)
+      .filter(e => !isNiExcavated(e))
+      .map(e=>{
+        const daysSince = Math.floor((now - new Date(e.ts).getTime()) / 86400000);
+        return Object.assign({}, e, {daysSince, daysUntilDue: INCUBATION_DAYS[e.speciesId] - daysSince});
+      })
+      .filter(e => e.daysUntilDue > 0)
+      .sort((a,b) => a.daysUntilDue - b.daysUntilDue);
+  }
+
+  // On the Due and Waiting lists, "Remove" always fully deletes — every entry on
+  // either list already has zero counts, so the revert-instead-of-delete logic used
+  // on the regular list would be a no-op here. This is for "stop tracking this nest
+  // entirely," not "undo an excavation" (there's nothing to undo yet).
+  async function removeDueEntry(id){
+    if(!confirm('Stop tracking this nest for excavation? This removes it entirely and cannot be undone.')) return;
+    state.nestInventory = state.nestInventory.filter(x=>x.id!==id);
+    await saveState();
+    renderNestInventory();
+    renderDueForExcavation();
+    renderNestsWaiting();
+  }
+
+  function renderNestsWaiting(){
+    const wrap = document.getElementById('nestsWaitingList');
+    if(!wrap) return;
+    const waiting = getNestsWaiting();
+    if(waiting.length===0){ wrap.innerHTML = '<div class="log-empty">No nests waiting yet.</div>'; return; }
+    wrap.innerHTML = waiting.map(e=>{
+      return `<div class="log-item">
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:600;color:var(--ink-muted);font-size:11px;">Due in ${e.daysUntilDue} day(s)</span></div>
+        <div class="log-item-meta">Grid ${escapeHtml(String(e.grid))} · Logged ${e.daysSince} day(s) ago${niGpsLine(e)}</div>
+        <button class="log-item-edit" data-id="${e.id}">Edit</button>
+        <button class="log-item-del" data-id="${e.id}">Remove</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
+      b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
+    });
+    wrap.querySelectorAll('.log-item-del').forEach(b=>{
+      b.addEventListener('click', ()=> removeDueEntry(b.dataset.id));
+    });
   }
 
   function renderDueForExcavation(){
@@ -2293,25 +2409,8 @@
       const overdueText = e.daysOverdue===0 ? 'Due today' : `${e.daysOverdue} day(s) overdue`;
       return `<div class="log-item">
         <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:600;color:var(--live-red);font-size:11px;">${overdueText}</span></div>
-        <div class="log-item-meta">Grid ${escapeHtml(String(e.grid))} · Logged ${e.daysSince} day(s) ago</div>
+        <div class="log-item-meta">Grid ${escapeHtml(String(e.grid))} · Logged ${e.daysSince} day(s) ago${niGpsLine(e)}</div>
         <button class="log-item-edit" data-id="${e.id}">Excavate</button>
-      </div>`;
-    }).join('');
-    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
-      b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
-    });
-  }
-
-  function renderNestInventory(){
-    const wrap = document.getElementById('nestInventoryList');
-    if(state.nestInventory.length===0){ wrap.innerHTML = '<div class="log-empty">No nest inventory entries yet.</div>'; return; }
-    wrap.innerHTML = state.nestInventory.map(e=>{
-      const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
-      return `<div class="log-item">
-        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">Grid ${escapeHtml(String(e.grid))}</span></div>
-        <div class="log-item-meta">Total clutch: ${total} · Damaged: ${e.damaged||0}</div>
-        ${e.comment ? `<div class="log-item-notes">${escapeHtml(e.comment)}</div>` : ''}
-        <button class="log-item-edit" data-id="${e.id}">Edit</button>
         <button class="log-item-del" data-id="${e.id}">Remove</button>
       </div>`;
     }).join('');
@@ -2319,11 +2418,54 @@
       b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
     });
     wrap.querySelectorAll('.log-item-del').forEach(b=>{
-      b.addEventListener('click', async ()=>{
-        state.nestInventory = state.nestInventory.filter(x=>x.id!==b.dataset.id);
-        await saveState(); renderNestInventory();
+      b.addEventListener('click', ()=> removeDueEntry(b.dataset.id));
+    });
+  }
+
+  // Removing a manually-added nest just deletes it — nothing else tracks it.
+  // Removing one that was auto-tracked from an index nest instead reverts it (resets
+  // counts to zero) rather than deleting outright — the physical nest still needs
+  // excavating, so it correctly reappears in Waiting/Due instead of vanishing.
+  async function removeOrRevertNestInventory(id){
+    const entry = state.nestInventory.find(e=>e.id===id);
+    if(!entry) return;
+    if(entry.fromIndexNest){
+      if(!confirm('This nest was auto-tracked from an index nest. Removing its excavation data sends it back to Waiting/Due rather than deleting it — the nest still needs excavating. Continue?')) return;
+      entry.hatchLive=0; entry.hatchDead=0; entry.emptyShells=0; entry.pippedDead=0; entry.pippedLive=0; entry.wholeEggs=0; entry.damaged=0;
+    } else {
+      if(!confirm('Remove this nest inventory entry? This cannot be undone.')) return;
+      state.nestInventory = state.nestInventory.filter(x=>x.id!==id);
+    }
+    await saveState();
+    renderNestInventory();
     renderDueForExcavation();
-      });
+    renderNestsWaiting();
+  }
+
+  // Shows excavated entries, PLUS any not-yet-excavated entry whose species has no
+  // known incubation period (so it can't be classified into Waiting/Due) — ensures
+  // every entry is visible/editable somewhere, never silently orphaned. Entries with
+  // a known incubation period that aren't excavated yet live in Waiting or Due
+  // instead, so this list stays a clean record of completed excavations.
+  function renderNestInventory(){
+    const wrap = document.getElementById('nestInventoryList');
+    const list = state.nestInventory.filter(e => isNiExcavated(e) || !niHasKnownIncubation(e));
+    if(list.length===0){ wrap.innerHTML = '<div class="log-empty">No nest inventory entries yet.</div>'; return; }
+    wrap.innerHTML = list.map(e=>{
+      const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
+      return `<div class="log-item">
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">Grid ${escapeHtml(String(e.grid))}</span></div>
+        <div class="log-item-meta">Total clutch: ${total} · Damaged: ${e.damaged||0}${niGpsLine(e)}</div>
+        ${e.comment ? `<div class="log-item-notes">${escapeHtml(e.comment)}</div>` : ''}
+        <button class="log-item-edit" data-id="${e.id}">Edit</button>
+        <button class="log-item-del" data-id="${e.id}">${e.fromIndexNest ? 'Revert to Due' : 'Remove'}</button>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.log-item-edit').forEach(b=>{
+      b.addEventListener('click', ()=> editNestInventory(b.dataset.id));
+    });
+    wrap.querySelectorAll('.log-item-del').forEach(b=>{
+      b.addEventListener('click', ()=> removeOrRevertNestInventory(b.dataset.id));
     });
   }
 
@@ -2334,7 +2476,7 @@
     // Column order mirrors the paper Nest Inventory form. "Laid" and "Hatched" (under
     // Date on the paper form) are repurposed here per Quinn's convention: Laid = Total
     // Clutch, Hatched = Hatchling Dead + Hatchling Live + Empty Shells.
-    const header = ['Date','Observer','District','Grid','Species','Nest #','Laid','Hatched','Hatchling Live','Hatchling Dead','Empty Shells','Pipped Dead','Pipped Live','Whole Eggs','Number Physically Damaged','Total Clutch','Comment'];
+    const header = ['Date','Observer','District','Grid','Species','Nest #','Laid','Hatched','Hatchling Live','Hatchling Dead','Empty Shells','Pipped Dead','Pipped Live','Whole Eggs','Number Physically Damaged','Total Clutch','LAT','LON','Comment'];
     const rows = state.nestInventory.slice().reverse().map(e=>{
       const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
       const hatched = (e.hatchDead||0)+(e.hatchLive||0)+(e.emptyShells||0);
@@ -2343,7 +2485,7 @@
         state.meta.date||'', observer, districtLabel, toGridNumber(e.grid), e.speciesLabel||'', e.nestNumber||'',
         total, hatched,
         e.hatchLive||0, e.hatchDead||0, e.emptyShells||0, e.pippedDead||0, e.pippedLive||0, e.wholeEggs||0,
-        e.damaged||0, total, e.comment||''
+        e.damaged||0, total, e.lat||'', e.lon||'', e.comment||''
       ];
     });
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
@@ -2366,6 +2508,7 @@
     const ok = await saveState();
     renderNestInventory();
     renderDueForExcavation();
+    renderNestsWaiting();
     if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
     showToast('Nest Inventory cleared');
   }
@@ -2724,6 +2867,7 @@
     document.getElementById('editFullBeachRun').value = state.meta.fullBeachRun ? 'on' : 'off';
     document.getElementById('editGridChangeAlert').value = state.meta.gridChangeAlert || 'off';
     document.getElementById('editContinuousTallyMode').value = state.meta.continuousTallyMode ? 'on' : 'off';
+    document.getElementById('editBigButtonMode').value = state.meta.bigButtonMode ? 'on' : 'off';
     populateGridPointSelect();
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
@@ -2754,6 +2898,7 @@
       state.meta.gridChangeAlert = selectedAlertMode;
     }
     state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
+    state.meta.bigButtonMode = document.getElementById('editBigButtonMode').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
@@ -2781,7 +2926,8 @@
     initGridMap();
     applyMode();
     renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
-    renderNestInventory(); renderDueForExcavation(); renderBeetleLog();
+    renderNestInventory(); renderDueForExcavation();
+    renderNestsWaiting(); renderBeetleLog();
     closeSettings();
     showToast('Reset complete');
   }
@@ -2821,7 +2967,8 @@
       initGridMap();
       applyMode();
       renderSpeciesGrid(); renderGridHistory(); renderLog(); renderSubsequent(); renderMetaLine(); renderDailyTotals(); renderAddGridButton();
-      renderNestInventory(); renderDueForExcavation(); renderBeetleLog();
+      renderNestInventory(); renderDueForExcavation();
+    renderNestsWaiting(); renderBeetleLog();
       if(!ok){ showToast('Imported locally — save FAILED, check storage'); return; }
       showToast('Backup imported');
     }catch(err){
@@ -3183,6 +3330,9 @@
 
   // Nest Inventory wiring
   document.getElementById('addNestInventoryBtn').addEventListener('click', openNestInventory);
+  document.getElementById('niGpsCaptureBtn').addEventListener('click', captureNiGpsPoint);
+  document.getElementById('addDueNestBtn').addEventListener('click', openNestInventory);
+  document.getElementById('addWaitingNestBtn').addEventListener('click', openNestInventory);
   document.getElementById('nestInventoryClose').addEventListener('click', closeNestInventoryModal);
   document.getElementById('niCancel').addEventListener('click', closeNestInventoryModal);
   document.getElementById('niSave').addEventListener('click', saveNestInventory);
@@ -3268,6 +3418,7 @@
     renderSubsequent();
     renderNestInventory();
     renderDueForExcavation();
+    renderNestsWaiting();
     renderBeetleLog();
     renderAddGridButton();
     applyMode();
