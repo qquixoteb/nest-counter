@@ -156,13 +156,21 @@
 
   /* Big Button Mode — only applies above 600px width, so it never fires on a phone
      screen (where the existing narrow-phone stacking already handles the 5-across
-     tally layout). A tablet-only accessibility option, not a general size increase. */
+     tally layout). A tablet-only accessibility option, not a general size increase.
+     Steppers stack vertically (+ on top, value middle, − bottom) rather than staying
+     horizontal — 5 tally fields side-by-side each needing 3 horizontal elements at a
+     bigger size added up to more width than most tablets actually have, causing
+     overlap. Stacking frees the horizontal room needed to make them properly bigger
+     without that problem. Scoped to .tally-fields specifically so the standalone
+     Grid Number stepper (plenty of room on its own) stays horizontal. */
   @media (min-width: 600px){
-    body.big-buttons .tally-fields{ gap:9px; }
-    body.big-buttons .step-btn{ width:42px; height:42px; font-size:22px; border-radius:8px; }
-    body.big-buttons .step-value{ width:40px; font-size:19px; padding:11px 2px; border-radius:8px; }
-    body.big-buttons .tally-field label{ font-size:13px; }
-    body.big-buttons .tally-species-name{ font-size:16px; }
+    body.big-buttons .tally-fields{ gap:10px; }
+    body.big-buttons .tally-fields .stepper{ flex-direction: column; gap:6px; }
+    body.big-buttons .tally-fields .step-btn{ width:100%; height:52px; font-size:26px; border-radius:10px; order:1; }
+    body.big-buttons .tally-fields .step-btn[data-step="1"]{ order:-1; }
+    body.big-buttons .tally-fields .step-value{ width:100%; order:0; font-size:22px; padding:14px 2px; border-radius:10px; }
+    body.big-buttons .tally-field label{ font-size:14px; }
+    body.big-buttons .tally-species-name{ font-size:17px; }
     body.big-buttons #gtGridNumber, body.big-buttons #ctGridNumber{ font-size:22px !important; padding:15px 8px !important; }
     body.big-buttons #addGridBtn{ font-size:18px; padding:20px; }
   }
