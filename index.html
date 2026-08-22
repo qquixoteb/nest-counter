@@ -320,7 +320,7 @@
     <div id="dueForExcavationList"></div>
   </div>
   <div class="log-section">
-    <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
+    <div class="log-head"><h2>Today's Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
     <div id="nestInventoryList"></div>
   </div>
   <div class="export-row">
@@ -2336,6 +2336,7 @@
 
   // ---------- nest inventory ----------
   let editingNestInventoryId = null;
+  let pendingNiContext = 'waiting'; // which "+ Add" button opened the modal — see openNestInventory
 
   function updateNiTotalClutch(){
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
@@ -2358,7 +2359,12 @@
     );
   }
 
-  function openNestInventory(){
+  // context: 'due' | 'waiting' | 'regular' — which "+ Add" button opened this, so the
+  // new entry lands in the section the person actually tapped, rather than always
+  // falling into whichever section the computed date/count classification happens to
+  // land on by default.
+  function openNestInventory(context){
+    pendingNiContext = context || 'waiting';
     editingNestInventoryId = null;
     document.getElementById('nestInventoryTitle').textContent = 'Add Nest Inventory';
     document.getElementById('niGrid').value = '';
@@ -2366,7 +2372,11 @@
     document.getElementById('niOtherNameWrap').style.display = 'none';
     document.getElementById('niOtherName').value = '';
     document.getElementById('niNestNumber').value = '';
-    document.getElementById('niDate').value = todayStr();
+    // "due" defaults the date safely past every species' incubation window (max is
+    // 90 days for leatherback) so it's immediately due unless changed — "waiting"
+    // and "regular" default to today, since a fresh entry not yet due is the natural
+    // case, and "regular" entries are pinned to that list regardless of date anyway.
+    document.getElementById('niDate').value = context==='due' ? dateInputStr(Date.now() - 100*86400000) : todayStr();
     document.getElementById('niLat').value = '';
     document.getElementById('niLon').value = '';
     ['niHatchLive','niHatchDead','niEmptyShells','niPippedDead','niPippedLive','niWholeEggs','niDamaged'].forEach(id=>{
@@ -2445,9 +2455,13 @@
     };
     if(editingNestInventoryId){
       const existing = state.nestInventory.find(e=>e.id===editingNestInventoryId);
-      if(existing) Object.assign(existing, fields);
+      if(existing) Object.assign(existing, fields); // pinnedToLog (if any) is untouched — not in fields
     } else {
-      state.nestInventory.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7), ...fields });
+      // Only entries added via the regular Today's Nest Inventory "+ Add" are pinned
+      // there — Due/Waiting entries stay driven by the computed date+count logic, so
+      // they still progress automatically over time as intended.
+      const pinnedToLog = pendingNiContext === 'regular';
+      state.nestInventory.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7), pinnedToLog, ...fields });
     }
     const ok = await saveState();
     renderNestInventory();
@@ -2488,6 +2502,7 @@
   function getNestsDueForExcavation(){
     const now = Date.now();
     return state.nestInventory
+      .filter(e => !e.pinnedToLog)
       .filter(niHasKnownIncubation)
       .filter(e => !isNiExcavated(e))
       .map(e=>{
@@ -2506,6 +2521,7 @@
   function getNestsWaiting(){
     const now = Date.now();
     return state.nestInventory
+      .filter(e => !e.pinnedToLog)
       .filter(niHasKnownIncubation)
       .filter(e => !isNiExcavated(e))
       .map(e=>{
@@ -2599,7 +2615,7 @@
   // instead, so this list stays a clean record of completed excavations.
   function renderNestInventory(){
     const wrap = document.getElementById('nestInventoryList');
-    const list = state.nestInventory.filter(e => isNiExcavated(e) || !niHasKnownIncubation(e));
+    const list = state.nestInventory.filter(e => e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e));
     if(list.length===0){ wrap.innerHTML = '<div class="log-empty">No nest inventory entries yet.</div>'; return; }
     wrap.innerHTML = list.map(e=>{
       const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
@@ -3657,10 +3673,10 @@
   document.getElementById('addIndexEntryBtn').addEventListener('click', openManualCapture);
 
   // Nest Inventory wiring
-  document.getElementById('addNestInventoryBtn').addEventListener('click', openNestInventory);
+  document.getElementById('addNestInventoryBtn').addEventListener('click', ()=> openNestInventory('regular'));
   document.getElementById('niGpsCaptureBtn').addEventListener('click', captureNiGpsPoint);
-  document.getElementById('addDueNestBtn').addEventListener('click', openNestInventory);
-  document.getElementById('addWaitingNestBtn').addEventListener('click', openNestInventory);
+  document.getElementById('addDueNestBtn').addEventListener('click', ()=> openNestInventory('due'));
+  document.getElementById('addWaitingNestBtn').addEventListener('click', ()=> openNestInventory('waiting'));
   document.getElementById('nestInventoryClose').addEventListener('click', closeNestInventoryModal);
   document.getElementById('niCancel').addEventListener('click', closeNestInventoryModal);
   document.getElementById('niSave').addEventListener('click', saveNestInventory);
