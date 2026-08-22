@@ -34,6 +34,12 @@
   .mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
 
   header{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  /* Only applied when running as the installed native app (see isNativeApp/applyTheme) —
+     the WebView renders edge-to-edge under the phone's status bar there, unlike a
+     regular browser tab which already accounts for its own chrome. env() is a
+     fallback in case the native StatusBar call below doesn't take effect on some
+     device/OS combination — belt and suspenders rather than relying on just one. */
+  body.native-app header{ padding-top: max(20px, env(safe-area-inset-top)); }
   .nps-logo{ width:34px; height:auto; flex-shrink:0; margin-top:2px; }
   .title-block{ flex:1; min-width:0; }
   .title-block h1{ font-size: 22px; font-weight:700; margin:0 0 2px; letter-spacing:0.2px; }
@@ -95,6 +101,7 @@
   .gh-summary{ font-size:12px; color:var(--ink-muted); margin-top:5px; line-height:1.5; font-family:'IBM Plex Mono',monospace; }
 
   .export-btn{ background:var(--excel-green); border:1px solid var(--excel-green); color:#FFFFFF; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .export-btn-fwc{ background:var(--gold); border:1px solid var(--gold); color:#2A1D05; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; }
   .export-row{ display:flex; gap:8px; margin-top:18px; }
   .export-row .export-btn{ flex:2; margin-top:0; }
   .new-day-btn{ width:100%; background:transparent; border:1px solid var(--rare); color:var(--rare); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; cursor:pointer; margin-top:10px; }
@@ -300,6 +307,15 @@
 
 <div id="nestInventoryModeContent" style="display:none;">
   <div class="log-section">
+    <button type="button" id="notYetDueToggle" style="width:100%; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:12px 14px; font-size:14px; font-weight:600; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+      <span>Not Yet Due</span><span id="notYetDueArrow">▸</span>
+    </button>
+    <div id="notYetDueContent" style="display:none; margin-top:10px;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="copy-btn" id="addWaitingNestBtn">+ Add</button></div>
+      <div id="nestsWaitingList"></div>
+    </div>
+  </div>
+  <div class="log-section">
     <div class="log-head"><h2>Due for Excavation</h2><button class="copy-btn" id="addDueNestBtn">+ Add</button></div>
     <div id="dueForExcavationList"></div>
   </div>
@@ -307,12 +323,9 @@
     <div class="log-head"><h2>Nest Inventory</h2><button class="copy-btn" id="addNestInventoryBtn">+ Add</button></div>
     <div id="nestInventoryList"></div>
   </div>
-  <div class="log-section">
-    <div class="log-head"><h2>Not Yet Due</h2><button class="copy-btn" id="addWaitingNestBtn">+ Add</button></div>
-    <div id="nestsWaitingList"></div>
-  </div>
   <div class="export-row">
     <button class="export-btn" id="exportNestInventoryBtn">⬇ Export</button>
+    <button class="export-btn-fwc" id="exportFwcBtn">⬇ Export for FWC</button>
   </div>
   <button class="new-day-btn" id="clearNestInventoryBtn">🗓 Clear Day</button>
   <div class="new-day-hint">Clears today's Nest Inventory entries on this device</div>
@@ -581,6 +594,7 @@
     </div>
     <div class="field" id="niOtherNameWrap" style="display:none;"><label>Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
     <div class="field"><label>Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
+    <div class="field"><label>Date</label><input type="date" id="niDate"></div>
     <button type="button" class="btn btn-secondary" id="niGpsCaptureBtn" style="width:100%; margin-bottom:8px;">📍 Capture GPS Point</button>
     <div class="coord-row">
       <div class="field"><label>Latitude</label><input type="text" id="niLat" inputmode="decimal" placeholder="—"></div>
@@ -724,11 +738,28 @@
   let rareBlockIdx = 0;
 
   function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  // Same local-time-safe approach as todayStr() above — avoids the classic bug where
+  // new Date(dateString) treats a date-only string as UTC midnight, which can shift
+  // to the wrong local day depending on timezone.
+  function dateInputStr(tsOrDateStr){
+    const d = new Date(tsOrDateStr);
+    if(isNaN(d.getTime())) return todayStr();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function dateInputToTs(dateInputValue){
+    const parts = (dateInputValue||'').split('-');
+    if(parts.length!==3) return new Date().toISOString();
+    const d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+    return d.toISOString();
+  }
 
   async function syncDateToToday(){
     const today=todayStr();
-    if(state?.meta && state.meta.date!==today){
-      state.meta.date=today;
+    const freshRunTime = guessRunTime();
+    let changed = false;
+    if(state?.meta && state.meta.date!==today){ state.meta.date=today; changed=true; }
+    if(state?.meta && state.meta.runTime!==freshRunTime){ state.meta.runTime=freshRunTime; changed=true; }
+    if(changed){
       await saveState();
       renderMetaLine();
     }
@@ -747,7 +778,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0 },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -788,6 +819,8 @@
     }
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
     if(meta.bigButtonMode === undefined || meta.bigButtonMode === null) meta.bigButtonMode = false;
+    if(meta.fwcSurveyTimeCounter === undefined || meta.fwcSurveyTimeCounter === null) meta.fwcSurveyTimeCounter = 0;
+    if(meta.fwcDisturbanceCounter === undefined || meta.fwcDisturbanceCounter === null) meta.fwcDisturbanceCounter = 0;
 
     let species = loaded.species || base.species;
     if(!species.apollo && !species.playalinda){
@@ -817,6 +850,11 @@
   function applyTheme(){
     document.body.classList.toggle('light-mode', !!state.meta.lightMode);
     document.body.classList.toggle('big-buttons', !!state.meta.bigButtonMode);
+    const native = isNativeApp();
+    document.body.classList.toggle('native-app', native);
+    if(native && window.Capacitor.Plugins.StatusBar){
+      window.Capacitor.Plugins.StatusBar.setOverlaysWebView({overlay:false}).catch(()=>{});
+    }
   }
 
   // ---------- survey mode switching ----------
@@ -1703,7 +1741,7 @@
       pendingGridCandidate = null;
       if(hadPriorGrid){
         const alertMode = state.meta.gridChangeAlert;
-        if((alertMode==='vibrate' || alertMode==='both') && navigator.vibrate) navigator.vibrate([400, 120, 400]);
+        if(alertMode==='vibrate' || alertMode==='both') triggerGridChangeVibration();
         if(alertMode==='notify' || alertMode==='both') showGridChangeNotification(newGridNumber, newDistrict);
       }
       if(hadPriorGrid && state.meta.continuousTallyMode && state.meta.currentMode==='turtle'){
@@ -1716,6 +1754,14 @@
   // Requests Notification permission, triggered by a direct user action (saving
   // Settings) as browsers require. Returns whether permission ended up granted.
   async function requestNotificationPermissionIfNeeded(){
+    if(isNativeApp()){
+      try{
+        const status = await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+        return status.display === 'granted';
+      }catch(err){
+        return false;
+      }
+    }
     if(!('Notification' in window)) return false;
     if(Notification.permission === 'granted') return true;
     if(Notification.permission === 'denied') return false;
@@ -1727,13 +1773,25 @@
     }
   }
 
-  // Shown via the service worker rather than the plain Notification constructor —
-  // more reliable for an installed PWA. Uses a fixed tag so a new grid-change
-  // notification replaces the last one instead of piling up while walking.
+  // Shown via the service worker on the PWA. Native builds use it too, but the
+  // service-worker path is a plain PWA feature — it may not register reliably inside
+  // an Android WebView the way a real browser tab does, so the native app uses the
+  // proper native Local Notifications plugin instead, which doesn't have that
+  // uncertainty (it's a direct native call, not routed through the WebView at all).
   function showGridChangeNotification(gridNumber, district){
+    const districtLabel = district==='playalinda' ? 'Playalinda' : 'Apollo';
+    if(isNativeApp()){
+      window.Capacitor.Plugins.LocalNotifications.schedule({
+        notifications: [{
+          id: 1, // fixed id — each new grid-change notification replaces the last one
+          title: 'Grid changed',
+          body: `Now in Grid ${gridNumber} — ${districtLabel}`,
+        }]
+      }).catch(()=>{});
+      return;
+    }
     if(!('Notification' in window) || Notification.permission !== 'granted') return;
     if(!navigator.serviceWorker || !navigator.serviceWorker.ready) return;
-    const districtLabel = district==='playalinda' ? 'Playalinda' : 'Apollo';
     navigator.serviceWorker.ready.then(reg=>{
       reg.showNotification('Grid changed', {
         body: `Now in Grid ${gridNumber} — ${districtLabel}`,
@@ -1741,6 +1799,23 @@
         silent: false
       });
     }).catch(()=>{});
+  }
+
+  // navigator.vibrate() requires a recent direct tap to work at all (a browser
+  // restriction) — a GPS callback firing in the background never qualifies, so it's
+  // silently blocked there regardless of platform. The native Haptics plugin calls
+  // the OS directly and isn't subject to that restriction, so it's used instead
+  // whenever running as the native app. Two calls approximate the same double-pulse
+  // feel as the web version's [400,120,400] pattern, since the plugin only takes a
+  // single duration per call.
+  function triggerGridChangeVibration(){
+    if(isNativeApp()){
+      const Haptics = window.Capacitor.Plugins.Haptics;
+      Haptics.vibrate({duration:400}).catch(()=>{});
+      setTimeout(()=>{ Haptics.vibrate({duration:400}).catch(()=>{}); }, 520);
+      return;
+    }
+    if(navigator.vibrate) navigator.vibrate([400, 120, 400]);
   }
 
   // Simple, stateless auto-fill: the grid you were likely just in, computed directly
@@ -1768,25 +1843,89 @@
     setTextAll(GRID_RESULT_IDS, text);
   }
 
+  // Uses the Capgo Background Geolocation native plugin when running as an
+  // installed Capacitor app (keeps tracking through screen lock/backgrounding),
+  // and falls back to the plain Web Geolocation API unchanged when running as a
+  // regular PWA/browser tab — the same index.html serves both.
+  function isNativeApp(){
+    return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  }
+
+  // The `<a download>` browser trick that XLSX.writeFile() and plain CSV downloads
+  // rely on doesn't reliably work inside an Android WebView the way it does in a
+  // real browser tab — it silently no-ops (no error, no file saved). Native builds
+  // instead write the file to the app's own cache directory (always accessible, no
+  // storage permission needed) and hand it to the native Share sheet, so the person
+  // picks where it actually ends up (Drive, email, Files app, etc).
+  async function nativeSaveAndShare(base64OrText, filename, isBase64){
+    const Filesystem = window.Capacitor.Plugins.Filesystem;
+    const Share = window.Capacitor.Plugins.Share;
+    const writeOptions = { path: filename, data: base64OrText, directory: 'CACHE' };
+    if(!isBase64) writeOptions.encoding = 'utf8';
+    const result = await Filesystem.writeFile(writeOptions);
+    await Share.share({ title: filename, files: [result.uri] });
+  }
+  function arrayBufferToBase64(buf){
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    for(let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+  // Shared by every XLSX export (turtle, nest inventory, tiger beetle) — writes via
+  // native share on the installed app, falls back to the regular browser download
+  // for the PWA/web version, unchanged from before.
+  async function saveWorkbook(wb, filename){
+    if(isNativeApp()){
+      const buf = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+      await nativeSaveAndShare(arrayBufferToBase64(buf), filename, true);
+      showToast('Saved — choose where to send it');
+    } else {
+      XLSX.writeFile(wb, filename);
+      showToast('Excel file downloading…');
+    }
+  }
+
   function toggleGridTracking(){
     const buttons = GRID_TOGGLE_BTN_IDS.map(id=>document.getElementById(id)).filter(Boolean);
     if(gridWatchId!==null){
-      navigator.geolocation.clearWatch(gridWatchId);
+      if(isNativeApp()){
+        window.Capacitor.Plugins.BackgroundGeolocation.stop();
+      } else {
+        navigator.geolocation.clearWatch(gridWatchId);
+      }
       gridWatchId = null;
       buttons.forEach(b=>b.textContent = '▶ Start');
       setTextAll(GRID_RESULT_IDS, 'Stopped');
       return;
     }
     if(!gridMapSegments){ showToast('Load a grid map first'); return; }
-    if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
     detectedGridHistory = [];
     pendingGridCandidate = null;
     setTextAll(GRID_RESULT_IDS, 'Locating…');
-    gridWatchId = navigator.geolocation.watchPosition(
-      (pos)=>{ renderGridLiveResult(findNearestGridSegment(pos.coords.latitude, pos.coords.longitude), pos.coords.accuracy); },
-      (err)=>{ renderGridLiveResult(null, null, 'GPS error — check permissions'); },
-      {enableHighAccuracy:true, maximumAge:5000}
-    );
+
+    if(isNativeApp()){
+      window.Capacitor.Plugins.BackgroundGeolocation.start(
+        {
+          backgroundMessage: 'Tracking your grid position for Nest Counter — tap to cancel.',
+          backgroundTitle: 'Nest Counter is tracking your location',
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 5
+        },
+        (location, error) => {
+          if(error){ renderGridLiveResult(null, null, 'GPS error — check permissions'); return; }
+          renderGridLiveResult(findNearestGridSegment(location.latitude, location.longitude), location.accuracy);
+        }
+      );
+      gridWatchId = 'native'; // truthy marker only — the plugin manages its own single watch internally, no id needed to stop it
+    } else {
+      if(!('geolocation' in navigator)){ showToast('This browser has no geolocation support'); return; }
+      gridWatchId = navigator.geolocation.watchPosition(
+        (pos)=>{ renderGridLiveResult(findNearestGridSegment(pos.coords.latitude, pos.coords.longitude), pos.coords.accuracy); },
+        (err)=>{ renderGridLiveResult(null, null, 'GPS error — check permissions'); },
+        {enableHighAccuracy:true, maximumAge:5000}
+      );
+    }
     buttons.forEach(b=>b.textContent = '■ Stop');
   }
 
@@ -2227,6 +2366,7 @@
     document.getElementById('niOtherNameWrap').style.display = 'none';
     document.getElementById('niOtherName').value = '';
     document.getElementById('niNestNumber').value = '';
+    document.getElementById('niDate').value = todayStr();
     document.getElementById('niLat').value = '';
     document.getElementById('niLon').value = '';
     ['niHatchLive','niHatchDead','niEmptyShells','niPippedDead','niPippedLive','niWholeEggs','niDamaged'].forEach(id=>{
@@ -2254,6 +2394,7 @@
       document.getElementById('niOtherName').value = entry.speciesLabel || '';
     }
     document.getElementById('niNestNumber').value = entry.nestNumber || '';
+    document.getElementById('niDate').value = dateInputStr(entry.ts);
     document.getElementById('niLat').value = entry.lat || '';
     document.getElementById('niLon').value = entry.lon || '';
     document.getElementById('niHatchLive').value = entry.hatchLive || 0;
@@ -2295,6 +2436,7 @@
       grid, speciesId, speciesLabel, nestNumber,
       lat: document.getElementById('niLat').value.trim(),
       lon: document.getElementById('niLon').value.trim(),
+      ts: dateInputToTs(document.getElementById('niDate').value),
       hatchLive: v('niHatchLive'), hatchDead: v('niHatchDead'),
       emptyShells: v('niEmptyShells'), pippedDead: v('niPippedDead'), pippedLive: v('niPippedLive'),
       wholeEggs: v('niWholeEggs'), damaged: v('niDamaged'),
@@ -2305,7 +2447,7 @@
       const existing = state.nestInventory.find(e=>e.id===editingNestInventoryId);
       if(existing) Object.assign(existing, fields);
     } else {
-      state.nestInventory.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7), ts: new Date().toISOString(), ...fields });
+      state.nestInventory.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7), ...fields });
     }
     const ok = await saveState();
     renderNestInventory();
@@ -2477,6 +2619,170 @@
     });
   }
 
+  // ---------- FWC bulk upload export ----------
+  // Separate from the internal XLSX export above — this produces the exact CSV
+  // format FWC's bulk upload tool expects, built from CNS_Data_Dictionary.xlsx and
+  // 2026_Bulk_Upload_Template_CNS.xlsx. Relocation data is intentionally not
+  // produced at all, since this operation doesn't relocate nests.
+  //
+  // Known, deliberate gaps (fields FWC wants that this app has no data for) are left
+  // blank per FWC's own instructions ("leave the field blank" for unknowns) rather
+  // than guessed: Escarpment, Distance to Dune, Distance to HT Line, Seaward of
+  // Structure, Structure Type, Nest Relation to Project, Final Crawl Activity,
+  // Treatment Change tracking, and all Human/Water disturbance detail (this app only
+  // ever records predation).
+  const FWC_SPECIES_CODE = { loggerhead:'Cc', green:'Cm', leatherback:'Dc', kemps:'Lk' };
+  const FWC_BEACH_ID = { apollo:'505', playalinda:'601.1' };
+  // F/R/X/W map directly to FWC's predator list. Q ("Turtle" — meaning destroyed by
+  // another nesting turtle) has no equivalent in FWC's Primary Predator list at all;
+  // per instruction, it's skipped from that field and noted in Comments instead.
+  const FWC_PREDATOR_CODE = { F:'HOG', R:'RAC', X:'GHO', W:'COY' };
+
+  function fwcCsvEscape(val){
+    if(val===null || val===undefined) return '';
+    const s = String(val);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }
+  function fwcDateStr(tsOrDateStr){
+    const d = new Date(tsOrDateStr);
+    if(isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  // "NA"/"NB" (Nest, Above/Below HT) — derived from the sighting code's B suffix.
+  function fwcReportType(sightingCode){
+    if(!sightingCode) return '';
+    return sightingCode.endsWith('B') ? 'NB' : 'NA';
+  }
+  function fwcFindIndexEntry(ni){
+    return state.indexLog.find(e =>
+      e.speciesLabel===ni.speciesLabel && String(e.nestNumber)===String(ni.nestNumber) && String(e.grid)===String(ni.grid)
+    );
+  }
+  function fwcFindSubsequentEntries(ni){
+    return state.subsequentSightings.filter(e =>
+      e.speciesLabel===ni.speciesLabel && String(e.nestNumber)===String(ni.nestNumber) && String(e.grid)===String(ni.grid) && e.disturbanceCode
+    );
+  }
+  // Generated once per nest and stored permanently on the record — FWC's system uses
+  // this ID to match/update existing records, so it must never change once assigned.
+  async function fwcGetOrAssignId(ni, idxEntry){
+    if(ni.fwcId) return ni.fwcId;
+    const district = ni.district || state.meta.district;
+    const beachId = FWC_BEACH_ID[district] || '';
+    const reportType = fwcReportType(idxEntry && idxEntry.sightingCode);
+    const dateSrc = (idxEntry && idxEntry.ts) || ni.ts;
+    const d = new Date(dateSrc);
+    const yymmdd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    const latStr = String((idxEntry && idxEntry.lat) || ni.lat || '');
+    const ll = latStr.length>=2 ? latStr.slice(-2) : latStr.padStart(2,'0');
+    state.meta.fwcSurveyTimeCounter = (state.meta.fwcSurveyTimeCounter||0) + 1;
+    const surveyTime = String(state.meta.fwcSurveyTimeCounter).padStart(6,'0');
+    ni.fwcId = `${beachId}-${reportType}-${yymmdd}${ll}-${surveyTime}`;
+    await saveState();
+    return ni.fwcId;
+  }
+  async function fwcGetOrAssignDisturbanceId(sub, district){
+    if(sub.fwcDisturbanceId) return sub.fwcDisturbanceId;
+    const beachId = FWC_BEACH_ID[district] || '';
+    const d = new Date(sub.ts);
+    const yymmdd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    state.meta.fwcDisturbanceCounter = (state.meta.fwcDisturbanceCounter||0) + 1;
+    const seq = String(state.meta.fwcDisturbanceCounter).padStart(6,'0');
+    sub.fwcDisturbanceId = `${beachId}-${yymmdd}-${seq}`;
+    await saveState();
+    return sub.fwcDisturbanceId;
+  }
+
+  async function exportFwc(){
+    if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return; }
+    const observer = state.meta.observer || '';
+
+    const crawlHeader = ['Observer Name','Beach Name','City','Report Type','Survey Date','Survey Time','Report Latitude','Report Longitude','Address','Index Zones','Local Zones','Species','Final Species','Final Crawl Activity','Marked Nest','Marked Nest Reason','Marked Nest Other Description','Clutch Verified','Egg Removed','FWC ID','Local False Crawl ID','Local Nest ID','Seaward of Structure','Structure Type','Other Structure Description','Nest Relation to Proj','Escarpment','Distance to Dune','Distance to HT Line','Initial Treatment','Final Treatment','Treatment Change Date','Treatment Change Reason','Treatment Change Reason Desc','Emergence Date 1','Nest Inventoried','Not Inventoried Reason','Not Inventoried Reason Des','Inventory Date','Nest Checked Daily','Disturbances Discovered','Disturbance Types Discovered','Dead Hatchlings','Live Hatchlings','Empty Shells','Pipped Dead','Pipped Live','Whole Eggs','Damaged Eggs','Damaged During Incubation','Comments','Proof Status'];
+    const disturbHeader = ['FWC ID','Disturbance ID','Local Nest ID','Beach Name','Species','Marked Nest','Marked Nest Reason','Disturbance Type','Disturbance Date','Predation Type','Primary Predator','Other Predators','Num Eggs Predated','Num Dead Injured','Human Disturbance Type','HD Eggs Damaged','HD Eggs Removed','HD Reported LE','Water Event Type','Weather Related','Storm Name','Disturbance Comments'];
+
+    const crawlRows = [];
+    const disturbRows = [];
+
+    for(const ni of state.nestInventory){
+      const idxEntry = fwcFindIndexEntry(ni);
+      const district = ni.district || state.meta.district;
+      const beachName = district==='playalinda' ? 'Canaveral National Seashore (Brevard County)' : 'Canaveral National Seashore (Volusia County)';
+      const speciesCode = FWC_SPECIES_CODE[ni.speciesId] || '';
+      const fwcId = await fwcGetOrAssignId(ni, idxEntry);
+      const excavated = !!(ni.hatchLive||ni.hatchDead||ni.emptyShells||ni.pippedDead||ni.pippedLive||ni.wholeEggs||ni.damaged);
+
+      const subs = fwcFindSubsequentEntries(ni);
+      const commentParts = [];
+      if(ni.comment) commentParts.push(ni.comment);
+
+      let disturbancesDiscovered = 'No';
+      const discoveredTypes = [];
+      for(const sub of subs){
+        const codes = [sub.disturbanceCode, sub.disturbanceCode2].filter(Boolean);
+        for(const code of codes){
+          if(code==='Q'){
+            commentParts.push('Predation code Q (destroyed by another nesting turtle) — no FWC predator equivalent');
+            continue; // skipped from Primary Predator per instruction, noted here instead
+          }
+          const predatorCode = FWC_PREDATOR_CODE[code];
+          if(!predatorCode) continue;
+          disturbancesDiscovered = 'Yes';
+          discoveredTypes.push('P');
+          const distId = await fwcGetOrAssignDisturbanceId(sub, district);
+          disturbRows.push([
+            fwcId, distId, ni.nestNumber||'', beachName, speciesCode, 'Yes', '',
+            'P', fwcDateStr(sub.ts), '', predatorCode, '', '', '',
+            '', '', '', '', '', '', '', sub.notes||''
+          ]);
+        }
+      }
+
+      crawlRows.push([
+        observer, beachName, '', fwcReportType(idxEntry && idxEntry.sightingCode),
+        fwcDateStr((idxEntry && idxEntry.ts) || ni.ts), '',
+        (idxEntry && idxEntry.lat) || ni.lat || '', (idxEntry && idxEntry.lon) || ni.lon || '',
+        '', '', toGridNumber(ni.grid), speciesCode, speciesCode, '',
+        'Yes', '', '',
+        'No', 'No',
+        fwcId, '', ni.nestNumber||'',
+        '', '', '', '', '', '', '',
+        'B', 'B', '', '', '',
+        '',
+        excavated ? 'Yes' : 'No', '', '',
+        excavated ? fwcDateStr(ni.ts) : '',
+        '', disturbancesDiscovered, discoveredTypes.join(','),
+        ni.hatchDead||'', ni.hatchLive||'', ni.emptyShells||'', ni.pippedDead||'', ni.pippedLive||'', ni.wholeEggs||'', ni.damaged||'', '',
+        commentParts.join(' | '), 'Unproofed'
+      ]);
+    }
+
+    const crawlCsv = [crawlHeader, ...crawlRows].map(row => row.map(fwcCsvEscape).join(',')).join('\r\n');
+    const disturbCsv = [disturbHeader, ...disturbRows].map(row => row.map(fwcCsvEscape).join(',')).join('\r\n');
+
+    if(isNativeApp()){
+      try{
+        await nativeSaveAndShare(crawlCsv, 'CNS Crawl Data.csv', false);
+        await nativeSaveAndShare(disturbCsv, 'CNS Disturbances.csv', false);
+        showToast(`Saved both FWC files — choose where to send them (${crawlRows.length} nest record(s), ${disturbRows.length} disturbance(s))`);
+      }catch(e){
+        showToast('FWC export failed — try again');
+      }
+      return;
+    }
+
+    function downloadCsv(content, filename){
+      const blob = new Blob([content], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    downloadCsv(crawlCsv, 'CNS Crawl Data.csv');
+    downloadCsv(disturbCsv, 'CNS Disturbances.csv');
+    showToast(`Downloaded both FWC files — ${crawlRows.length} nest record(s), ${disturbRows.length} disturbance(s)`);
+  }
+
   function buildNestInventoryWorkbook(){
     if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return null; }
     const wb = XLSX.utils.book_new();
@@ -2502,11 +2808,11 @@
     return {wb, filename};
   }
 
-  function exportNestInventory(){
+  async function exportNestInventory(){
     if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
     const built = buildNestInventoryWorkbook();
     if(!built) return;
-    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
+    try{ await saveWorkbook(built.wb, built.filename); }
     catch(e){ showToast('Export failed — try again'); }
   }
 
@@ -2669,11 +2975,11 @@
     return {wb, filename};
   }
 
-  function exportBeetle(){
+  async function exportBeetle(){
     if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
     const built = buildBeetleWorkbook();
     if(!built) return;
-    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
+    try{ await saveWorkbook(built.wb, built.filename); }
     catch(e){ showToast('Export failed — try again'); }
   }
 
@@ -2940,18 +3246,25 @@
     showToast('Reset complete');
   }
 
-  function exportStateBackup(){
+  async function exportStateBackup(){
+    const filename = `nest-counter-backup-${state.meta.date || todayStr()}.json`;
     try{
-      const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nest-counter-backup-${state.meta.date || todayStr()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Backup downloaded');
+      const json = JSON.stringify(state, null, 2);
+      if(isNativeApp()){
+        await nativeSaveAndShare(json, filename, false);
+        showToast('Backup saved — choose where to send it');
+      } else {
+        const blob = new Blob([json], {type:'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Backup downloaded');
+      }
     }catch(err){
       showToast('Backup failed — try again');
     }
@@ -3254,10 +3567,10 @@
     return {wb, filename};
   }
 
-  function exportExcel(){
+  async function exportExcel(){
     if(typeof XLSX === 'undefined'){ showToast('Excel library failed to load — check connection and try again'); return; }
     const built = buildTurtleWorkbook();
-    try{ XLSX.writeFile(built.wb, built.filename); showToast('Excel file downloading…'); }
+    try{ await saveWorkbook(built.wb, built.filename); }
     catch(e){ showToast('Export failed — try again'); }
   }
 
@@ -3276,6 +3589,13 @@
   document.getElementById('advancedSettingsToggle').addEventListener('click', ()=>{
     const content = document.getElementById('advancedSettingsContent');
     const arrow = document.getElementById('advancedSettingsArrow');
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    arrow.textContent = isHidden ? '▾' : '▸';
+  });
+  document.getElementById('notYetDueToggle').addEventListener('click', ()=>{
+    const content = document.getElementById('notYetDueContent');
+    const arrow = document.getElementById('notYetDueArrow');
     const isHidden = content.style.display === 'none';
     content.style.display = isHidden ? 'block' : 'none';
     arrow.textContent = isHidden ? '▾' : '▸';
@@ -3352,6 +3672,7 @@
     document.getElementById(id).addEventListener('input', updateNiTotalClutch);
   });
   document.getElementById('exportNestInventoryBtn').addEventListener('click', exportNestInventory);
+  document.getElementById('exportFwcBtn').addEventListener('click', exportFwc);
   document.getElementById('clearNestInventoryBtn').addEventListener('click', clearNestInventory);
 
   // Tiger Beetle wiring
