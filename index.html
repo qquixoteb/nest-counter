@@ -646,13 +646,21 @@
     </div>
     <div class="settings-group">
       <h3 id="countsHeading">Current counts</h3>
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">These fields directly overwrite the running count — fine at the start of a fresh day. If you're correcting a starting-count mistake after already tallying today, use "Fix start" instead: enter what today's starting count should have been, and it recalculates the total by preserving today's already-tallied nests, without re-triggering any index nest captures.</div>
-      <div class="settings-row"><span>Loggerhead</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editLog" style="width:90px;"><button type="button" class="fix-start-btn" data-species="loggerhead" data-label="Loggerhead">Fix start</button></div></div>
-      <div class="settings-row"><span>Loggerhead next index #</span><input type="number" id="editLogNextIdx"></div>
-      <div class="settings-row"><span>Green</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editGrn" style="width:90px;"><button type="button" class="fix-start-btn" data-species="green" data-label="Green">Fix start</button></div></div>
+      <div class="settings-row"><span>Green</span><input type="number" id="editGrn"></div>
       <div class="settings-row"><span>Green next index #</span><input type="number" id="editGrnNextIdx"></div>
-      <div class="settings-row"><span>Leatherback</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editLth" style="width:90px;"><button type="button" class="fix-start-btn" data-species="leatherback" data-label="Leatherback">Fix start</button></div></div>
-      <div class="settings-row"><span>Kemp's Ridley</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editKmp" style="width:90px;"><button type="button" class="fix-start-btn" data-species="kemps" data-label="Kemp's Ridley">Fix start</button></div></div>
+      <div class="settings-row"><span>Loggerhead</span><input type="number" id="editLog"></div>
+      <div class="settings-row"><span>Loggerhead next index #</span><input type="number" id="editLogNextIdx"></div>
+      <div class="settings-row"><span>Leatherback</span><input type="number" id="editLth"></div>
+      <div class="settings-row"><span>Kemp's Ridley</span><input type="number" id="editKmp"></div>
+      <div id="fixStartSection" style="display:none; margin-top:14px;">
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Correcting a starting-count mistake after already tallying today — enter what the starting count should have been, and it recalculates the total by preserving today's already-tallied nests, without re-triggering any index nest captures.</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <button type="button" class="fix-start-btn" data-species="green" data-label="Green">Fix Green start</button>
+          <button type="button" class="fix-start-btn" data-species="loggerhead" data-label="Loggerhead">Fix Loggerhead start</button>
+          <button type="button" class="fix-start-btn" data-species="leatherback" data-label="Leatherback">Fix Leatherback start</button>
+          <button type="button" class="fix-start-btn" data-species="kemps" data-label="Kemp's Ridley">Fix Kemp's start</button>
+        </div>
+      </div>
     </div>
 
     <button type="button" id="advancedSettingsToggle" style="width:100%; background:none; border:1px solid var(--line); color:var(--ink-muted); border-radius:10px; padding:11px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:22px;">
@@ -852,13 +860,14 @@
 
   // Sums today's already-tallied new nests for a species, across both the fixed
   // (loggerhead/green) and rare (leatherback/kemps/other) tally structures. Scoped
-  // to today's date specifically — state.grids isn't automatically cleared each day
-  // (only on manual "Start New Day"), so it can hold more than one day's tallies.
-  function todaysTalliedIncrement(speciesId){
+  // to today's date AND district specifically — state.grids isn't automatically
+  // cleared each day (only on manual "Start New Day"), so it can hold more than one
+  // day's tallies, and a full-beach-run day can hold both districts' tallies too.
+  function todaysTalliedIncrement(speciesId, district){
     const today = state.meta.date;
     let sum = 0;
     state.grids.forEach(g=>{
-      if(dateInputStr(g.ts) !== today) return;
+      if(dateInputStr(g.ts) !== today || g.district !== district) return;
       const fixed = g.tallies[speciesId];
       if(fixed) sum += (fixed.na||0) + (fixed.nb||0) + (fixed.pred||0);
       (g.tallies.rare||[]).forEach(r=>{
@@ -873,10 +882,14 @@
   // any index nest captures. Computes today's tallied increment for this species,
   // asks what the starting count should have been, then shifts both the running
   // count and nextIndex by the resulting delta — preserving relative spacing within
-  // the index interval rather than recomputing thresholds from scratch.
+  // the index interval rather than recomputing thresholds from scratch. Reads the
+  // district from the dropdown directly, not state.meta.district, since the
+  // dropdown may show a different district than what's saved if switched but not
+  // yet confirmed via Save.
   async function fixStartCount(speciesId, speciesLabel){
-    const sp = currentSpecies()[speciesId];
-    const increment = todaysTalliedIncrement(speciesId);
+    const district = document.getElementById('editDistrict').value;
+    const sp = state.species[district][speciesId];
+    const increment = todaysTalliedIncrement(speciesId, district);
     const currentStart = sp.count - increment;
     const input = prompt(
       `What should today's starting ${speciesLabel} count have been?\n\nCurrently recorded starting count: ${currentStart}\nToday's tallies added: +${increment}\nCurrent total: ${sp.count}`,
@@ -889,7 +902,7 @@
     if(delta === 0){ showToast('No change'); return; }
     sp.count += delta;
     if(sp.nextIndex !== undefined) sp.nextIndex += delta;
-    populateCountFields(state.meta.district);
+    populateCountFields(district);
     const ok = await saveState();
     renderSpeciesGrid();
     renderMetaLine();
@@ -3224,6 +3237,14 @@
   }
 
   // ---------- settings ----------
+  // Whether any grid tally has been logged today for this district — the "Fix
+  // start" buttons only make sense once a run has actually started (before that,
+  // increment is always 0, so a normal field edit and Fix Start are equivalent).
+  function hasTodaysTallies(district){
+    const today = state.meta.date;
+    return state.grids.some(g => dateInputStr(g.ts) === today && g.district === district);
+  }
+
   function populateCountFields(districtKey){
     const sp = state.species[districtKey];
     document.getElementById('countsHeading').textContent = `Current counts (${districtKey==='playalinda'?'Playalinda':'Apollo'})`;
@@ -3233,6 +3254,7 @@
     document.getElementById('editGrnNextIdx').value = sp.green.nextIndex;
     document.getElementById('editLth').value = sp.leatherback.count;
     document.getElementById('editKmp').value = sp.kemps.count;
+    document.getElementById('fixStartSection').style.display = hasTodaysTallies(districtKey) ? 'block' : 'none';
   }
 
   function openSettings(){
