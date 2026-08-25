@@ -19,8 +19,8 @@
     --radius: 14px;
   }
   body.light-mode{
-    --bg: #FFFFFF; --bg-grad: #F2F2EC; --surface: #F1F1EA; --surface-2: #E5E5DC; --line: #CFCFC4;
-    --ink: #000000; --ink-muted: #5A5A50; --gold: #A8720E;
+    --bg: #FFFFFF; --bg-grad: #F2F2EC; --surface: #F1F1EA; --surface-2: #E5E5DC; --line: #3D3D36;
+    --ink: #000000; --ink-muted: #4A4A40; --gold: #A8720E;
     --log: #A85D24; --grn: #2F6B41; --kmp: #6B7536; --lth: #4E5B62; --rare: #B83A50; --danger: #A83226;
     --live-red: #C7301F; --excel-green: #1A5C38;
   }
@@ -641,7 +641,7 @@
         <textarea id="editDailyComment"></textarea>
       </div>
       <div class="field"><label>Color scheme</label>
-        <select id="editLightMode"><option value="dark">Dark (default)</option><option value="light">Light (white background)</option></select>
+        <select id="editLightMode"><option value="light">Light</option><option value="dark">Dark</option></select>
       </div>
     </div>
     <div class="settings-group">
@@ -788,7 +788,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:false, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0 },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:true, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0 },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -829,6 +829,13 @@
     }
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
     if(meta.bigButtonMode === undefined || meta.bigButtonMode === null) meta.bigButtonMode = false;
+    // One-time forced switch to light mode for existing installs (better sunlight
+    // readability) — only fires once, tracked by this flag, so the toggle in
+    // Settings still works normally afterward and won't keep getting overridden.
+    if(!meta.lightModeMigrated){
+      meta.lightMode = true;
+      meta.lightModeMigrated = true;
+    }
     if(meta.fwcSurveyTimeCounter === undefined || meta.fwcSurveyTimeCounter === null) meta.fwcSurveyTimeCounter = 0;
     if(meta.fwcDisturbanceCounter === undefined || meta.fwcDisturbanceCounter === null) meta.fwcDisturbanceCounter = 0;
 
