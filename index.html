@@ -87,6 +87,7 @@
   .log-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .log-head h2{ font-size:15px; margin:0; }
   .copy-btn{ background:none; border:1px solid var(--line); color:var(--ink-muted); font-family:'IBM Plex Mono',monospace; font-size:11px; border-radius:8px; padding:6px 10px; cursor:pointer; }
+  .fix-start-btn{ background:none; border:1px solid var(--gold); color:var(--gold); font-family:'IBM Plex Mono',monospace; font-size:10.5px; border-radius:8px; padding:6px 9px; cursor:pointer; white-space:nowrap; }
   .log-empty{ color:var(--ink-muted); font-size:13px; padding:16px; text-align:center; border:1px dashed var(--line); border-radius:var(--radius); }
   .survey-picker-item{ width:100%; text-align:left; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; font-size:14px; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
   .survey-picker-item.active{ border-color:var(--gold); color:var(--gold); }
@@ -645,12 +646,13 @@
     </div>
     <div class="settings-group">
       <h3 id="countsHeading">Current counts</h3>
-      <div class="settings-row"><span>Loggerhead</span><input type="number" id="editLog"></div>
+      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">These fields directly overwrite the running count — fine at the start of a fresh day. If you're correcting a starting-count mistake after already tallying today, use "Fix start" instead: enter what today's starting count should have been, and it recalculates the total by preserving today's already-tallied nests, without re-triggering any index nest captures.</div>
+      <div class="settings-row"><span>Loggerhead</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editLog" style="width:90px;"><button type="button" class="fix-start-btn" data-species="loggerhead" data-label="Loggerhead">Fix start</button></div></div>
       <div class="settings-row"><span>Loggerhead next index #</span><input type="number" id="editLogNextIdx"></div>
-      <div class="settings-row"><span>Green</span><input type="number" id="editGrn"></div>
+      <div class="settings-row"><span>Green</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editGrn" style="width:90px;"><button type="button" class="fix-start-btn" data-species="green" data-label="Green">Fix start</button></div></div>
       <div class="settings-row"><span>Green next index #</span><input type="number" id="editGrnNextIdx"></div>
-      <div class="settings-row"><span>Leatherback</span><input type="number" id="editLth"></div>
-      <div class="settings-row"><span>Kemp's Ridley</span><input type="number" id="editKmp"></div>
+      <div class="settings-row"><span>Leatherback</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editLth" style="width:90px;"><button type="button" class="fix-start-btn" data-species="leatherback" data-label="Leatherback">Fix start</button></div></div>
+      <div class="settings-row"><span>Kemp's Ridley</span><div style="display:flex; gap:6px; align-items:center;"><input type="number" id="editKmp" style="width:90px;"><button type="button" class="fix-start-btn" data-species="kemps" data-label="Kemp's Ridley">Fix start</button></div></div>
     </div>
 
     <button type="button" id="advancedSettingsToggle" style="width:100%; background:none; border:1px solid var(--line); color:var(--ink-muted); border-radius:10px; padding:11px; font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:22px;">
@@ -847,6 +849,53 @@
   }
 
   function currentSpecies(){ return state.species[state.meta.district]; }
+
+  // Sums today's already-tallied new nests for a species, across both the fixed
+  // (loggerhead/green) and rare (leatherback/kemps/other) tally structures. Scoped
+  // to today's date specifically — state.grids isn't automatically cleared each day
+  // (only on manual "Start New Day"), so it can hold more than one day's tallies.
+  function todaysTalliedIncrement(speciesId){
+    const today = state.meta.date;
+    let sum = 0;
+    state.grids.forEach(g=>{
+      if(dateInputStr(g.ts) !== today) return;
+      const fixed = g.tallies[speciesId];
+      if(fixed) sum += (fixed.na||0) + (fixed.nb||0) + (fixed.pred||0);
+      (g.tallies.rare||[]).forEach(r=>{
+        if(r.speciesType === speciesId) sum += (r.na||0) + (r.nb||0) + (r.pred||0);
+      });
+    });
+    return sum;
+  }
+
+  // Lets a wrong starting count be corrected after tallies have already been logged
+  // for the day, without losing today's already-tallied progress or re-triggering
+  // any index nest captures. Computes today's tallied increment for this species,
+  // asks what the starting count should have been, then shifts both the running
+  // count and nextIndex by the resulting delta — preserving relative spacing within
+  // the index interval rather than recomputing thresholds from scratch.
+  async function fixStartCount(speciesId, speciesLabel){
+    const sp = currentSpecies()[speciesId];
+    const increment = todaysTalliedIncrement(speciesId);
+    const currentStart = sp.count - increment;
+    const input = prompt(
+      `What should today's starting ${speciesLabel} count have been?\n\nCurrently recorded starting count: ${currentStart}\nToday's tallies added: +${increment}\nCurrent total: ${sp.count}`,
+      String(currentStart)
+    );
+    if(input === null) return;
+    const newStart = parseInt(input, 10);
+    if(isNaN(newStart) || newStart < 0){ showToast('Enter a valid number'); return; }
+    const delta = newStart - currentStart;
+    if(delta === 0){ showToast('No change'); return; }
+    sp.count += delta;
+    if(sp.nextIndex !== undefined) sp.nextIndex += delta;
+    populateCountFields(state.meta.district);
+    const ok = await saveState();
+    renderSpeciesGrid();
+    renderMetaLine();
+    showToast(ok ? `${speciesLabel} corrected — today's ${increment} tallied nest(s) preserved` : 'Correction applied locally — save FAILED, check storage');
+  }
+
   function applyTheme(){
     document.body.classList.toggle('light-mode', !!state.meta.lightMode);
     document.body.classList.toggle('big-buttons', !!state.meta.bigButtonMode);
@@ -3602,6 +3651,9 @@
   });
   document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
   document.getElementById('resetAllBtn').addEventListener('click', resetAll);
+  document.querySelectorAll('.fix-start-btn').forEach(b=>{
+    b.addEventListener('click', ()=> fixStartCount(b.dataset.species, b.dataset.label));
+  });
   document.getElementById('advancedSettingsToggle').addEventListener('click', ()=>{
     const content = document.getElementById('advancedSettingsContent');
     const arrow = document.getElementById('advancedSettingsArrow');
