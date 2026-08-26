@@ -259,8 +259,11 @@
 <div id="turtleModeContent">
 <div id="continuousTallyPanel" style="display:none;">
   <div class="daily-totals" style="text-align:left; border-color:var(--gold);">
-    <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:8px;">Continuous Tally — grid auto-fills from live tracking, tallies save automatically when the grid changes</div>
-    <div class="field" style="margin-bottom:10px;"><label>Grid number</label>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="font-size:11.5px; color:var(--ink-muted);">Continuous Tally — saves each tally immediately, grid number tracks live position</div>
+      <div class="mono" style="font-size:11.5px; color:var(--gold); font-weight:700; white-space:nowrap; margin-left:8px;" id="ctRunTotal">0 this run</div>
+    </div>
+    <div class="field" style="margin-bottom:10px;"><label>Grid number (live)</label>
       <div class="stepper" style="width:100%;">
         <button type="button" class="step-btn" id="ctGridMinus">−</button>
         <input type="number" id="ctGridNumber" inputmode="numeric" style="flex:1; text-align:center; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:11px 8px; font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;">
@@ -270,6 +273,7 @@
     <div id="ctSpeciesBlocks"></div>
     <div id="ctRareBlocks"></div>
     <button type="button" class="copy-btn" id="ctAddRare" style="width:100%; margin-top:4px;">+ Add rare species</button>
+    <button type="button" class="copy-btn" id="ctDeleteLatest" style="width:100%; margin-top:10px;">↩ Delete Latest</button>
   </div>
 </div>
 <div class="grid" id="speciesGrid"></div>
@@ -677,9 +681,12 @@
         <div class="field"><label>Alert on grid change</label>
           <select id="editGridChangeAlert"><option value="off">Off (default)</option><option value="vibrate">Vibrate</option><option value="notify">Notify</option><option value="both">Both</option></select>
         </div>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. The grid number auto-fills from live grid tracking and updates as you move — type over it any time to correct it temporarily, but the next confirmed grid change overwrites it again. Whenever the detected grid changes, whatever's tallied so far is automatically saved for the grid you just left, and every counter resets to zero for the new one. Requires grid tracking to be running.</div>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. Each tally saves immediately as you tap it — nothing is held back and lost if the app closes. Index nest thresholds (and predations) are checked immediately too, so a capture prompt can appear right on the tap that triggers it. The grid number tracks live GPS position; a manual correction sticks for a while (see below) before returning to live tracking. Requires grid tracking to be running.</div>
         <div class="field"><label>Continuous tally mode</label>
           <select id="editContinuousTallyMode"><option value="off">Off (default)</option><option value="on">On</option></select>
+        </div>
+        <div class="field"><label>Manual grid edit sticks for</label>
+          <select id="editCtStickyMinutes"><option value="0.5">30 seconds</option><option value="1">1 minute (default)</option><option value="2">2 minutes</option><option value="3">3 minutes</option><option value="5">5 minutes</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Makes the tally steppers, labels, and grid number field bigger on the Add Grid Tally form. Only takes effect on a large tablet screen — never shrinks or crowds things on a phone.</div>
         <div class="field"><label>Big button mode</label>
@@ -788,7 +795,7 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:true, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0 },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:true, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0, ctStickyMinutes:1 },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -829,6 +836,7 @@
     }
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
     if(meta.bigButtonMode === undefined || meta.bigButtonMode === null) meta.bigButtonMode = false;
+    if(meta.ctStickyMinutes === undefined || meta.ctStickyMinutes === null) meta.ctStickyMinutes = 1;
     // One-time forced switch to light mode for existing installs (better sunlight
     // readability) — only fires once, tracked by this flag, so the toggle in
     // Settings still works normally afterward and won't keep getting overridden.
@@ -1180,11 +1188,166 @@
   }
 
   // ---------- continuous tally mode ----------
-  // Persistent alternative to the Add Grid Tally modal: grid number auto-fills from
-  // live GPS tracking (editable any time, but overwritten again on the next confirmed
-  // transition), and whatever's tallied gets auto-committed the moment the detected
-  // grid changes, then resets to zero for the new grid. Reuses the exact same
-  // processGridTally() core as the modal — same index-threshold and queue logic.
+  // Save-as-you-go architecture: each stepper tap writes directly to state.grids
+  // immediately (no staging/commit step), so nothing is lost if the app closes
+  // mid-grid. Index-threshold checks and predation processing are ALSO immediate —
+  // a tap that crosses a threshold pops the capture prompt right then, rather than
+  // waiting for the grid to change. FC (false crawl) taps never affect species
+  // count or index thresholds at all, so those stay pure save-only. The grid
+  // number itself tracks live GPS position, but a manual edit "sticks" for a
+  // configurable duration (Settings → Continuous tally mode, default 1 minute)
+  // before reverting to live tracking.
+  let ctManualOverrideUntil = 0;
+  let ctActionHistory = []; // stack of recent save actions, for Delete Latest
+  let ctRunTotal = 0; // total tally taps this GPS-tracking run — NOT reset on grid change, only when tracking (re)starts
+
+  function ctParseFieldId(id){
+    let m = /^ct_([a-z]+)_(fca|fcb|na|nb|pred)$/.exec(id);
+    if(m) return {kind:'fixed', speciesKey:m[1], field:m[2]};
+    m = /^ctr_(\d+)_(fca|fcb|na|nb|pred)$/.exec(id);
+    if(m) return {kind:'rare', blockIdx:m[1], field:m[2]};
+    return null;
+  }
+
+  function ctFindOrCreateGridRecord(gridNumber){
+    const district = districtForGrid(gridNumber);
+    let rec = state.grids.find(g => parseInt(g.gridNumber,10)===parseInt(gridNumber,10) && g.district===district);
+    if(!rec){
+      rec = {
+        id: Date.now()+'-'+Math.random().toString(36).slice(2,7), gridNumber, district, ts: new Date().toISOString(),
+        tallies: {
+          loggerhead:{fca:0,fcb:0,na:0,nb:0,pred:0,runningAfter:null,nextIndexBefore:null},
+          green:{fca:0,fcb:0,na:0,nb:0,pred:0,runningAfter:null,nextIndexBefore:null},
+          rare:[]
+        }
+      };
+      state.grids.unshift(rec);
+    }
+    return rec;
+  }
+
+  // The core save-as-you-go write for the raw tally number. Returns the new value
+  // for immediate display. Does NOT touch species count or index state — that's
+  // handled separately by ctProcessCountEffect, called right after for na/nb/pred.
+  async function ctSaveIncrement(gridNumber, kind, speciesKey, field, delta, rareInfo){
+    const rec = ctFindOrCreateGridRecord(gridNumber);
+    let newValue;
+    if(kind==='rare'){
+      let entry = rec.tallies.rare.find(r => r.speciesType===rareInfo.speciesType && (rareInfo.speciesType!=='other' || r.name===rareInfo.name));
+      if(!entry){
+        entry = {speciesType: rareInfo.speciesType, name: rareInfo.name||'', fca:0,fcb:0,na:0,nb:0,pred:0, runningAfter:null};
+        rec.tallies.rare.push(entry);
+      }
+      entry[field] = Math.max(0, (entry[field]||0) + delta);
+      newValue = entry[field];
+    } else {
+      if(!rec.tallies[speciesKey]) rec.tallies[speciesKey] = {fca:0,fcb:0,na:0,nb:0,pred:0,runningAfter:null,nextIndexBefore:null};
+      rec.tallies[speciesKey][field] = Math.max(0, (rec.tallies[speciesKey][field]||0) + delta);
+      newValue = rec.tallies[speciesKey][field];
+    }
+    await saveState();
+    return newValue;
+  }
+
+  // Immediate index-threshold + predation processing for a single na/nb/pred tap
+  // (delta is normally ±1). Mirrors processGridTally's logic but applied to one
+  // unit at a time rather than a batch, so a threshold-crossing tap can pop the
+  // capture prompt right on that tap. A decrementing tap (delta<0) never triggers
+  // new captures — computeTriggeredNumbers naturally returns nothing when
+  // after<=before — it only walks the count back down.
+  async function ctProcessCountEffect(gridNumber, kind, speciesKey, field, delta, rareInfo){
+    if(field==='fca' || field==='fcb') return; // false crawls never affect count or index
+    const district = districtForGrid(gridNumber);
+    const sp = state.species[district];
+    let speciesId, label, before, after, alwaysIdx, interval, nextIdx;
+
+    if(kind==='rare' && rareInfo.speciesType==='other'){
+      // "other" sightings have no tracked running count — every added unit is its
+      // own index nest, decrementing just walks back the raw save, nothing to undo here.
+      if(delta>0){
+        captureQueue = [{speciesId:'other', speciesLabel:rareInfo.name, nestNumber:null, grid:gridNumber}];
+        subsequentQueue = [];
+        await saveState();
+        processQueue();
+      }
+      return;
+    }
+
+    if(kind==='rare'){
+      speciesId = rareInfo.speciesType;
+      const meta = SPECIES.find(s=>s.id===speciesId);
+      label = meta.label; alwaysIdx = true;
+      before = sp[speciesId].count;
+    } else {
+      speciesId = speciesKey;
+      const meta = FIXED_TALLY_SPECIES.find(m=>m.id===speciesId);
+      label = meta.label; alwaysIdx = false;
+      before = sp[speciesId].count;
+      interval = sp[speciesId].interval;
+      nextIdx = sp[speciesId].nextIndex;
+    }
+
+    after = before + delta;
+    const nums = computeTriggeredNumbers(before, after, interval, alwaysIdx, nextIdx);
+    captureQueue = [];
+    subsequentQueue = [];
+    nums.forEach(n=>captureQueue.push({speciesId, speciesLabel:label, nestNumber:n, grid:gridNumber}));
+
+    // A predated nest that doesn't land on an index number still needs a
+    // subsequent-sighting entry — na/nb (fresh discoveries) never do.
+    if(!alwaysIdx && field==='pred' && delta>0 && nums.length===0){
+      subsequentQueue.push({speciesId, speciesLabel:label, nestNumber:after, grid:gridNumber});
+    }
+
+    if(nums.length>0 && !alwaysIdx) sp[speciesId].nextIndex = nums[nums.length-1] + interval;
+    sp[speciesId].count = after;
+    flashCard(speciesId);
+
+    const ok = await saveState();
+    renderSpeciesGrid();
+    renderMetaLine();
+    if(!ok){ showToast('Save FAILED — check storage, verify counts'); return; }
+    if(captureQueue.length>0) processQueue();
+    else if(subsequentQueue.length>0) processSubsequentQueue();
+  }
+
+  function ctUpdateRunTotalDisplay(){
+    const el = document.getElementById('ctRunTotal');
+    if(el) el.textContent = `${ctRunTotal} this run`;
+  }
+
+  // Wiring specific to the continuous panel — separate from wireSteppers(), which
+  // stays exactly as before for the modal (accumulate locally, commit on Save).
+  function wireContinuousSteppers(container){
+    container.querySelectorAll('.step-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const parsed = ctParseFieldId(btn.dataset.target);
+        if(!parsed) return;
+        const gridNumber = document.getElementById('ctGridNumber').value.trim();
+        if(!gridNumber){ showToast('Enter a grid number first'); return; }
+        const step = parseInt(btn.dataset.step, 10);
+
+        let rareInfo = null;
+        if(parsed.kind==='rare'){
+          const speciesType = document.getElementById(`ctr_${parsed.blockIdx}_species`).value;
+          const name = speciesType==='other' ? document.getElementById(`ctr_${parsed.blockIdx}_name`).value.trim() : '';
+          if(speciesType==='other' && !name){ showToast('Enter a species name first'); return; }
+          rareInfo = {speciesType, name};
+        }
+
+        const newValue = await ctSaveIncrement(gridNumber, parsed.kind, parsed.speciesKey, parsed.field, step, rareInfo);
+        document.getElementById(btn.dataset.target).value = newValue;
+
+        ctActionHistory.push({gridNumber, kind:parsed.kind, speciesKey:parsed.speciesKey, field:parsed.field, delta:step, rareInfo, targetId:btn.dataset.target});
+        if(ctActionHistory.length>50) ctActionHistory.shift();
+        if(step > 0) ctRunTotal++; else ctRunTotal = Math.max(0, ctRunTotal-1);
+        ctUpdateRunTotalDisplay();
+
+        await ctProcessCountEffect(gridNumber, parsed.kind, parsed.speciesKey, parsed.field, step, rareInfo);
+      });
+    });
+  }
+
   function buildContinuousSpeciesBlocks(){
     const speciesBlocksEl = document.getElementById('ctSpeciesBlocks');
     speciesBlocksEl.innerHTML = FIXED_TALLY_SPECIES.map(meta => `
@@ -1199,39 +1362,112 @@
           ${stepperField('Pred', `ct_${meta.id}_pred`, 'pred')}
         </div>
       </div>`).join('');
-    wireSteppers(speciesBlocksEl);
+    wireContinuousSteppers(speciesBlocksEl);
     document.getElementById('ctRareBlocks').innerHTML = '';
+    ctPopulateFromSavedGrid();
+  }
+
+  // Populates the displayed fields from whatever's already saved for the current
+  // grid number — matters if reopening a grid that was already partly tallied
+  // (app restart, switching away and back), rather than always showing zero.
+  function ctPopulateFromSavedGrid(){
+    const gridNumber = document.getElementById('ctGridNumber').value.trim();
+    if(!gridNumber) return;
+    const district = districtForGrid(gridNumber);
+    const rec = state.grids.find(g => parseInt(g.gridNumber,10)===parseInt(gridNumber,10) && g.district===district);
+    if(!rec) return;
+    FIXED_TALLY_SPECIES.forEach(meta=>{
+      const t = rec.tallies[meta.id];
+      if(!t) return;
+      ['fca','fcb','na','nb','pred'].forEach(field=>{
+        const el = document.getElementById(`ct_${meta.id}_${field}`);
+        if(el) el.value = t[field]||0;
+      });
+    });
+    (rec.tallies.rare||[]).forEach(r=>{
+      addRareBlock('ct', 'ctRareBlocks');
+      const blocks = document.querySelectorAll('#ctRareBlocks .rare-block');
+      const lastBlock = blocks[blocks.length-1];
+      const idx = lastBlock.dataset.idx;
+      document.getElementById(`ctr_${idx}_species`).value = r.speciesType;
+      if(r.speciesType==='other'){
+        document.getElementById(`ctr_${idx}_namewrap`).style.display = 'block';
+        document.getElementById(`ctr_${idx}_name`).value = r.name;
+      }
+      ['fca','fcb','na','nb','pred'].forEach(field=>{
+        document.getElementById(`ctr_${idx}_${field}`).value = r[field]||0;
+      });
+    });
   }
 
   function initContinuousTallyPanel(){
-    buildContinuousSpeciesBlocks();
     let gridValue = suggestNextGrid();
     if(gridValue === null) gridValue = '';
     const current = getCurrentDetectedGrid();
     if(current && current.district === state.meta.district) gridValue = current.gridNumber;
     document.getElementById('ctGridNumber').value = gridValue;
+    ctUpdateRunTotalDisplay();
+    buildContinuousSpeciesBlocks(); // after setting the grid value, so ctPopulateFromSavedGrid sees it
   }
 
-  // Called automatically whenever live grid tracking confirms a real transition
-  // (see recordDetectedGrid). Commits whatever's tallied so far for the grid being
-  // left, then resets every counter to zero for the newly-entered grid.
-  async function commitContinuousTally(previousGridNumber, newGridNumber){
-    const hasAnyTally = FIXED_TALLY_SPECIES.some(meta =>
-      numVal(`ct_${meta.id}_fca`) || numVal(`ct_${meta.id}_fcb`) || numVal(`ct_${meta.id}_na`) || numVal(`ct_${meta.id}_nb`) || numVal(`ct_${meta.id}_pred`)
-    ) || document.querySelectorAll('#ctRareBlocks .rare-block').length > 0;
+  // Marks a manual grid-number edit as active for the configured sticky duration
+  // (Settings → Continuous tally mode, default 1 minute) — live GPS updates are
+  // skipped while this is active, then resume automatically once it expires.
+  function ctMarkManualOverride(){
+    const minutes = (state.meta.ctStickyMinutes !== undefined && state.meta.ctStickyMinutes !== null) ? state.meta.ctStickyMinutes : 1;
+    ctManualOverrideUntil = Date.now() + minutes*60*1000;
+  }
 
-    if(hasAnyTally){
-      const result = await processGridTally(previousGridNumber, 'ct', 'ctRareBlocks');
-      if(result.ok){
-        showToast(`Grid ${result.gridNumber} auto-saved${result.districtSwitchMsg}`);
-        if(captureQueue.length>0) processQueue();
-        else if(subsequentQueue.length>0) processSubsequentQueue();
-      } else if(result.reason==='save-failed'){
-        showToast(`Save FAILED for grid ${previousGridNumber} — check storage, then verify counts`);
+  // Central setter for the displayed grid number — just updates the display and
+  // rebuilds the fields to show whatever's already saved for the new grid (or
+  // zero if nothing has been tallied there yet). No processing happens here
+  // anymore — every tap already processes its own index/count effect immediately.
+  function setCtGridNumber(newValue){
+    const input = document.getElementById('ctGridNumber');
+    const newStr = String(newValue).trim();
+    if(newStr === input.value.trim()) return;
+    input.value = newStr;
+    buildContinuousSpeciesBlocks();
+  }
+
+  // Called whenever live tracking confirms a real grid transition — updates the
+  // displayed grid number to match, unless a manual override is currently sticky.
+  function ctLiveGridUpdate(newGridNumber){
+    if(Date.now() < ctManualOverrideUntil) return; // manual edit still sticky, skip
+    setCtGridNumber(newGridNumber);
+  }
+
+  // Undoes the single most recent save action, regardless of which grid it went
+  // to — necessary since with save-as-you-go there's no longer a "staging area" to
+  // easily correct a mistake within before it's saved. Reverses the raw tally
+  // value and, for count-affecting fields, the species count too. Deliberately
+  // does NOT reverse an already-advanced nextIndex or remove an already-logged
+  // index nest entry — safer to leave nextIndex slightly ahead (meaning it simply
+  // takes one more tap to re-reach it) than risk a duplicate capture prompt for
+  // the same physical nest.
+  async function ctDeleteLatest(){
+    const action = ctActionHistory.pop();
+    if(!action){ showToast('Nothing to undo'); return; }
+    await ctSaveIncrement(action.gridNumber, action.kind, action.speciesKey, action.field, -action.delta, action.rareInfo);
+    if(action.delta > 0) ctRunTotal = Math.max(0, ctRunTotal-1); else ctRunTotal++;
+    ctUpdateRunTotalDisplay();
+    if(action.field!=='fca' && action.field!=='fcb'){
+      const district = districtForGrid(action.gridNumber);
+      const sp = state.species[district];
+      const speciesId = action.kind==='rare' ? action.rareInfo.speciesType : action.speciesKey;
+      if(speciesId!=='other' && sp[speciesId]){
+        sp[speciesId].count = Math.max(0, sp[speciesId].count - action.delta);
+        await saveState();
+        renderSpeciesGrid();
+        renderMetaLine();
       }
     }
-    buildContinuousSpeciesBlocks();
-    document.getElementById('ctGridNumber').value = newGridNumber;
+    const currentGrid = document.getElementById('ctGridNumber').value.trim();
+    if(currentGrid === action.gridNumber){
+      const el = document.getElementById(action.targetId);
+      if(el) el.value = Math.max(0, (parseInt(el.value,10)||0) - action.delta);
+    }
+    showToast(`Undid last tally (grid ${action.gridNumber})`);
   }
 
   function applyContinuousTallyMode(){
@@ -1802,7 +2038,6 @@
     }
     if(pendingGridCandidate.count >= GRID_DEBOUNCE_READINGS){
       const hadPriorGrid = detectedGridHistory.length > 0; // don't alert/commit on the very first detection, only on real changes
-      const previousConfirmed = detectedGridHistory[0]; // capture before unshift, for continuous-tally auto-commit
       detectedGridHistory.unshift({district: pendingGridCandidate.district, gridNumber: pendingGridCandidate.gridNumber});
       if(detectedGridHistory.length > 2) detectedGridHistory.length = 2;
       const newGridNumber = pendingGridCandidate.gridNumber;
@@ -1814,7 +2049,7 @@
         if(alertMode==='notify' || alertMode==='both') showGridChangeNotification(newGridNumber, newDistrict);
       }
       if(hadPriorGrid && state.meta.continuousTallyMode && state.meta.currentMode==='turtle'){
-        commitContinuousTally(previousConfirmed.gridNumber, newGridNumber);
+        ctLiveGridUpdate(newGridNumber);
       }
     }
   }
@@ -1970,6 +2205,8 @@
     if(!gridMapSegments){ showToast('Load a grid map first'); return; }
     detectedGridHistory = [];
     pendingGridCandidate = null;
+    ctRunTotal = 0; // a fresh tracking run starts the "tallies this run" count over
+    ctUpdateRunTotalDisplay();
     setTextAll(GRID_RESULT_IDS, 'Locating…');
 
     if(isNativeApp()){
@@ -3275,6 +3512,7 @@
     document.getElementById('editFullBeachRun').value = state.meta.fullBeachRun ? 'on' : 'off';
     document.getElementById('editGridChangeAlert').value = state.meta.gridChangeAlert || 'off';
     document.getElementById('editContinuousTallyMode').value = state.meta.continuousTallyMode ? 'on' : 'off';
+    document.getElementById('editCtStickyMinutes').value = String(state.meta.ctStickyMinutes);
     document.getElementById('editBigButtonMode').value = state.meta.bigButtonMode ? 'on' : 'off';
     populateGridPointSelect();
     populateCountFields(state.meta.district || 'apollo');
@@ -3306,6 +3544,7 @@
       state.meta.gridChangeAlert = selectedAlertMode;
     }
     state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
+    state.meta.ctStickyMinutes = parseFloat(document.getElementById('editCtStickyMinutes').value);
     state.meta.bigButtonMode = document.getElementById('editBigButtonMode').value === 'on';
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
@@ -3816,13 +4055,23 @@
   document.getElementById('ctGridMinus').addEventListener('click', ()=>{
     const input = document.getElementById('ctGridNumber');
     const current = parseInt(input.value,10);
-    input.value = Math.max(0, (isNaN(current)?0:current) - 1);
+    ctMarkManualOverride();
+    setCtGridNumber(Math.max(0, (isNaN(current)?0:current) - 1));
   });
   document.getElementById('ctGridPlus').addEventListener('click', ()=>{
     const input = document.getElementById('ctGridNumber');
     const current = parseInt(input.value,10);
-    input.value = (isNaN(current)?0:current) + 1;
+    ctMarkManualOverride();
+    setCtGridNumber((isNaN(current)?0:current) + 1);
   });
+  document.getElementById('ctGridNumber').addEventListener('input', ()=>{
+    ctMarkManualOverride();
+  });
+  document.getElementById('ctGridNumber').addEventListener('change', (e)=>{
+    ctMarkManualOverride();
+    setCtGridNumber(e.target.value);
+  });
+  document.getElementById('ctDeleteLatest').addEventListener('click', ctDeleteLatest);
 
   // ---------- init ----------
   (async function init(){
