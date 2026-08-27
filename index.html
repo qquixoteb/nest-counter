@@ -902,7 +902,6 @@
   // is needed here either — a simple take-the-max-count merge is safe, matching
   // the same merge rule the script itself uses between the Sheet and OneDrive.
   const AGOL_STALE_MS = 15 * 60 * 1000; // warn if no successful sync in this long
-  const AGOL_AUTO_SYNC_MS = 3 * 60 * 1000; // background sync interval while the app is open
 
   function agolConfigured(){
     return !!(state.meta.agolSync && state.meta.agolSync.featureLayerUrl);
@@ -990,7 +989,7 @@
           District: districtLabel[districtKey],
           Species: speciesLabel[speciesKey],
           RunningTotal: sp.count,
-          NextIndex: (speciesKey==='loggerhead'||speciesKey==='green') ? sp.nextIndex : null,
+          NextIndex: (speciesKey==='loggerhead'||speciesKey==='green') ? sp.nextIndex : 0, // 0 placeholder — leatherback/kemps don't use next-index the same way, but the flow's schema likely expects a number, not null
           UpdatedBy: state.meta.observer||''
         });
       }
@@ -1483,7 +1482,6 @@
     renderSpeciesGrid();
     renderMetaLine();
     if(!ok){ showToast('Save FAILED — check storage, verify counts'); return; }
-    if(agolConfigured()) agolPush(); // fire-and-forget, never blocks the tally itself
     if(captureQueue.length>0) processQueue();
     else if(subsequentQueue.length>0) processSubsequentQueue();
   }
@@ -1843,7 +1841,6 @@
     renderMetaLine();
     renderAddGridButton();
     renderDailyTotals();
-    if(agolConfigured()) agolPush(); // fire-and-forget, never blocks the tally itself
     return {ok:true, isMerge, districtSwitchMsg, gridNumber};
   }
 
@@ -3839,6 +3836,7 @@
     renderDailyTotals();
     renderAddGridButton();
     if(!ok){ showToast('Save FAILED after clearing — check storage, then verify counts'); return; }
+    if(agolConfigured()) agolPull(); // fire-and-forget — get fresh master counts for the new day without blocking on the network
     showToast('New day started — running counts carried forward');
   }
 
@@ -4095,6 +4093,7 @@
     const built = buildTurtleWorkbook();
     try{ await saveWorkbook(built.wb, built.filename); }
     catch(e){ showToast('Export failed — try again'); }
+    if(agolConfigured()) agolPush(); // the one deliberate write per survey session — not per-tally, to avoid burning through the flow's run quota
   }
 
   // ---------- wire up ----------
@@ -4289,7 +4288,7 @@
     renderBeetleLog();
     renderAddGridButton();
     applyMode();
-    if(agolConfigured()){ agolPull(); setInterval(()=>{ agolPull(); agolPush(); }, AGOL_AUTO_SYNC_MS); }
+    if(agolConfigured()) agolPull(); // once at launch — periodic background polling removed, "Start New Day" is now the trigger for getting fresh master counts
   })();
 
 })();
