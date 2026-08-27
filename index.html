@@ -1079,6 +1079,7 @@
           Species: speciesLabel[speciesKey],
           RunningTotal: sp.count,
           NextIndex: (speciesKey==='loggerhead'||speciesKey==='green') ? sp.nextIndex : 0, // 0 placeholder — leatherback/kemps don't use next-index the same way, but the flow's schema likely expects a number, not null
+          LastUpdated: new Date().toISOString(),
           UpdatedBy: state.meta.observer||''
         });
       }
