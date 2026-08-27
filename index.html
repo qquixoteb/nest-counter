@@ -1094,7 +1094,6 @@
     const ok = await saveState();
     renderSpeciesGrid();
     renderMetaLine();
-    if(ok && agolConfigured()) agolPush();
     showToast(ok ? `${speciesLabel} corrected — today's ${increment} tallied nest(s) preserved` : 'Correction applied locally — save FAILED, check storage');
   }
 
@@ -3749,7 +3748,6 @@
     if(!ok){ showToast('Save FAILED — settings NOT saved, try again'); return; }
     closeSettings();
     showToast('Settings saved');
-    if(agolConfigured()) agolPull();
   }
 
   async function resetAll(){
@@ -4288,7 +4286,8 @@
     renderBeetleLog();
     renderAddGridButton();
     applyMode();
-    if(agolConfigured()) agolPull(); // once at launch — periodic background polling removed, "Start New Day" is now the trigger for getting fresh master counts
+    // No automatic sync anywhere — reads/writes only happen on an explicit tap:
+    // Sync Now, Export, or Start New Day. See agolPull()/agolPush() call sites.
   })();
 
 })();
