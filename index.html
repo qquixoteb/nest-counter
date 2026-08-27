@@ -256,6 +256,11 @@
   ⚠ <b>This browser is blocking storage.</b> Nothing you enter will be saved. This usually means Incognito/Private mode, or a browser setting blocking site data. Use <b>Export to Excel</b> before closing this page either way.
 </div>
 
+<div class="banner" id="agolBanner" style="display:none; border-color:rgba(212,160,23,0.55); background:linear-gradient(90deg, rgba(212,160,23,0.16), rgba(212,160,23,0.04));">
+  <span id="agolBannerText">Checking master species totals…</span>
+  <button type="button" class="copy-btn" id="agolBannerSyncBtn" style="margin-left:8px;">↻ Sync now</button>
+</div>
+
 <div id="turtleModeContent">
 <div id="continuousTallyPanel" style="display:none;">
   <div class="daily-totals" style="text-align:left; border-color:var(--gold);">
@@ -694,6 +699,16 @@
         </div>
       </div>
       <div class="settings-group" style="margin-top:22px;">
+        <h3>Master species totals</h3>
+        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Syncs Loggerhead/Green/Leatherback/Kemp's running counts directly with the OneDrive master file, via two Power Automate flows — one reads, one writes. Staff editing that file directly (paper data entry) are automatically reflected the next time this app reads, since there's only one copy of the data, not a separate synced copy. This only ever warns if the connection is stale or unreachable — it never blocks tallying.</div>
+        <div class="field"><label>Read flow URL</label><input type="url" id="editAgolUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
+        <div class="field"><label>Write flow URL</label><input type="url" id="editAgolWriteUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" class="copy-btn" id="agolSettingsSyncBtn">↻ Sync now</button>
+          <span id="agolSettingsStatus" style="font-size:11px; color:var(--ink-muted);">Not configured</span>
+        </div>
+      </div>
+      <div class="settings-group" style="margin-top:22px;">
         <h3>Grid map</h3>
         <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
           <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
@@ -795,7 +810,8 @@
 
   function defaultState(){
     return {
-      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:true, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0, ctStickyMinutes:1 },
+      meta: { observer:'', date: todayStr(), district:'apollo', runTime: guessRunTime(), dailyComment:'', lightMode:true, observerList:['Benson'], currentMode:'turtle', gridAutoFill:false, fullBeachRun:false, gridChangeAlert:'off', continuousTallyMode:false, bigButtonMode:false, fwcSurveyTimeCounter:0, fwcDisturbanceCounter:0, ctStickyMinutes:1,
+        agolSync: { featureLayerUrl:'', writeUrl:'', lastSync:null, status:'not-configured', lastError:null } },
       species:{
         apollo: defaultSpeciesSet(),
         playalinda: defaultSpeciesSet()
@@ -837,6 +853,8 @@
     if(meta.continuousTallyMode === undefined || meta.continuousTallyMode === null) meta.continuousTallyMode = false;
     if(meta.bigButtonMode === undefined || meta.bigButtonMode === null) meta.bigButtonMode = false;
     if(meta.ctStickyMinutes === undefined || meta.ctStickyMinutes === null) meta.ctStickyMinutes = 1;
+    if(!meta.agolSync || typeof meta.agolSync !== 'object') meta.agolSync = { featureLayerUrl:'', writeUrl:'', lastSync:null, status:'not-configured', lastError:null };
+    if(meta.agolSync.writeUrl === undefined) meta.agolSync.writeUrl = '';
     // One-time forced switch to light mode for existing installs (better sunlight
     // readability) — only fires once, tracked by this flag, so the toggle in
     // Settings still works normally afterward and won't keep getting overridden.
@@ -872,6 +890,162 @@
   }
 
   function currentSpecies(){ return state.species[state.meta.district]; }
+
+  // ---------- master species totals sync ----------
+  // Talks to a Google Apps Script Web App (not AGOL directly) — the script itself
+  // bridges a Google Sheet (what this endpoint reads/writes) with a OneDrive Excel
+  // file that paper-data staff can edit directly, syncing the two on its own
+  // schedule. The tablet never touches OneDrive or needs any login at all — that's
+  // the whole point of routing through the script. Warn-only: this never blocks
+  // tallying, it only reports staleness/errors via a banner. "One person per
+  // district at a time" (per Quinn) means no concurrent-write conflict resolution
+  // is needed here either — a simple take-the-max-count merge is safe, matching
+  // the same merge rule the script itself uses between the Sheet and OneDrive.
+  const AGOL_STALE_MS = 15 * 60 * 1000; // warn if no successful sync in this long
+  const AGOL_AUTO_SYNC_MS = 3 * 60 * 1000; // background sync interval while the app is open
+
+  function agolConfigured(){
+    return !!(state.meta.agolSync && state.meta.agolSync.featureLayerUrl);
+  }
+
+  // Talks to Power Automate's HTTP-triggered flow directly — the URL itself is a
+  // SAS-signed link (Power Automate's own security model), so no separate login or
+  // key is needed from the app's side, same as the other approaches we tried.
+  async function agolQuery(){
+    const url = state.meta.agolSync.featureLayerUrl;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Accepts either shape depending on how the flow's Response action is built —
+    // Power Automate's "List rows" action naturally outputs { value: [...] }.
+    return data.value || data.rows || [];
+  }
+
+  async function agolApplyEdits(updates){
+    const url = state.meta.agolSync.writeUrl;
+    if(!url) throw new Error('Write flow URL not configured');
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({updates})
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    return true;
+  }
+
+  async function agolPull(){
+    if(!agolConfigured()) return false;
+    state.meta.agolSync.status = 'syncing';
+    updateAgolBannerUI();
+    try{
+      const rows = await agolQuery();
+      if(rows.length===0) throw new Error('No rows returned');
+      for(const row of rows){
+        const districtKey = String(row.District||'').toLowerCase()==='playalinda' ? 'playalinda' : 'apollo';
+        const speciesRaw = String(row.Species||'').toLowerCase();
+        const speciesKey = speciesRaw.includes('logger')?'loggerhead':speciesRaw.includes('green')?'green':speciesRaw.includes('leather')?'leatherback':speciesRaw.includes('kemp')?'kemps':null;
+        if(!speciesKey) continue;
+        const remoteCount = Number(row.RunningTotal);
+        if(!Number.isFinite(remoteCount) || remoteCount < 0) continue;
+        const sp = state.species[districtKey][speciesKey];
+        // Take-the-max merge: safe given one writer per district at a time — never
+        // regresses this device's own newer local progress, but adopts the other
+        // device's (or a paper-user's OneDrive edit's) progress once it's ahead.
+        if(remoteCount > sp.count){
+          sp.count = remoteCount;
+          if(speciesKey==='loggerhead'||speciesKey==='green'){
+            const remoteNextIndex = Number(row.NextIndex);
+            if(Number.isFinite(remoteNextIndex)) sp.nextIndex = remoteNextIndex;
+          }
+        }
+      }
+      state.meta.agolSync.lastSync = new Date().toISOString();
+      state.meta.agolSync.status = 'fresh';
+      state.meta.agolSync.lastError = null;
+      await saveState();
+      renderSpeciesGrid();
+      renderMetaLine();
+      updateAgolBannerUI();
+      return true;
+    }catch(err){
+      state.meta.agolSync.status = 'error';
+      state.meta.agolSync.lastError = String(err.message||err);
+      updateAgolBannerUI();
+      return false;
+    }
+  }
+
+  // Best-effort, fire-and-forget push of current counts — called after a tally
+  // saves. Sends all 8 district/species rows every time; the endpoint just
+  // overwrites by District+Species key, so this is safe to call freely.
+  async function agolPush(){
+    if(!agolConfigured()) return false;
+    const districtLabel = {apollo:'Apollo', playalinda:'Playalinda'};
+    const speciesLabel = {loggerhead:'Loggerhead', green:'Green', leatherback:'Leatherback', kemps:"Kemp's Ridley"};
+    const updates = [];
+    for(const districtKey of ['apollo','playalinda']){
+      for(const speciesKey of ['loggerhead','green','leatherback','kemps']){
+        const sp = state.species[districtKey][speciesKey];
+        updates.push({
+          District: districtLabel[districtKey],
+          Species: speciesLabel[speciesKey],
+          RunningTotal: sp.count,
+          NextIndex: (speciesKey==='loggerhead'||speciesKey==='green') ? sp.nextIndex : null,
+          UpdatedBy: state.meta.observer||''
+        });
+      }
+    }
+    try{
+      await agolApplyEdits(updates);
+      state.meta.agolSync.lastSync = new Date().toISOString();
+      state.meta.agolSync.status = 'fresh';
+      state.meta.agolSync.lastError = null;
+      await saveState();
+      updateAgolBannerUI();
+      return true;
+    }catch(err){
+      state.meta.agolSync.status = 'error';
+      state.meta.agolSync.lastError = String(err.message||err);
+      updateAgolBannerUI();
+      return false;
+    }
+  }
+
+  function agolIsStale(){
+    const m = state.meta.agolSync;
+    if(!m.lastSync) return true;
+    return (Date.now() - new Date(m.lastSync).getTime()) > AGOL_STALE_MS;
+  }
+
+  function updateAgolSettingsStatusText(){
+    const el = document.getElementById('agolSettingsStatus');
+    if(!el) return;
+    const m = state.meta.agolSync;
+    if(!m.featureLayerUrl) el.textContent = 'Not configured';
+    else if(m.status==='syncing') el.textContent = 'Syncing…';
+    else if(m.status==='fresh' && !agolIsStale()) el.textContent = `Synced · ${new Date(m.lastSync).toLocaleTimeString()}`;
+    else if(m.status==='error') el.textContent = `Error: ${m.lastError||'unknown'}`;
+    else el.textContent = `Stale — last synced ${m.lastSync ? new Date(m.lastSync).toLocaleString() : 'never'}`;
+  }
+
+  function updateAgolBannerUI(){
+    updateAgolSettingsStatusText();
+    const banner = document.getElementById('agolBanner');
+    const text = document.getElementById('agolBannerText');
+    if(!banner || !text) return;
+    if(state.meta.currentMode !== 'turtle' || !agolConfigured()){ banner.style.display = 'none'; return; }
+    const m = state.meta.agolSync;
+    let msg, warn = false;
+    if(m.status==='syncing'){ msg = '↻ Checking master species totals…'; }
+    else if(m.status==='fresh' && !agolIsStale()){ msg = `✓ Master species totals synced ${new Date(m.lastSync).toLocaleTimeString()}.`; }
+    else if(m.status==='error'){ msg = `⚠ Could not reach master species totals (${m.lastError||'error'}) — counts on this device may be out of date.`; warn = true; }
+    else { msg = `⚠ Master species totals haven't synced recently — counts on this device may be out of date.`; warn = true; }
+    text.textContent = msg;
+    banner.style.display = 'block';
+    banner.style.borderColor = warn ? 'rgba(217,105,92,0.5)' : 'rgba(212,160,23,0.55)';
+    banner.style.background = warn ? 'linear-gradient(90deg, rgba(217,105,92,0.16), rgba(217,105,92,0.04))' : 'linear-gradient(90deg, rgba(212,160,23,0.16), rgba(212,160,23,0.04))';
+  }
+
 
   // Sums today's already-tallied new nests for a species, across both the fixed
   // (loggerhead/green) and rare (leatherback/kemps/other) tally structures. Scoped
@@ -921,6 +1095,7 @@
     const ok = await saveState();
     renderSpeciesGrid();
     renderMetaLine();
+    if(ok && agolConfigured()) agolPush();
     showToast(ok ? `${speciesLabel} corrected — today's ${increment} tallied nest(s) preserved` : 'Correction applied locally — save FAILED, check storage');
   }
 
@@ -948,6 +1123,7 @@
     document.getElementById('tigerBeetleModeContent').style.display = state.meta.currentMode==='tigerBeetle' ? 'block' : 'none';
     document.getElementById('modeTitle').textContent = MODE_TITLES[state.meta.currentMode] || 'Nest Counter';
     applyContinuousTallyMode();
+    updateAgolBannerUI();
   }
 
   function renderSurveyPicker(){
@@ -1307,6 +1483,7 @@
     renderSpeciesGrid();
     renderMetaLine();
     if(!ok){ showToast('Save FAILED — check storage, verify counts'); return; }
+    if(agolConfigured()) agolPush(); // fire-and-forget, never blocks the tally itself
     if(captureQueue.length>0) processQueue();
     else if(subsequentQueue.length>0) processSubsequentQueue();
   }
@@ -1666,6 +1843,7 @@
     renderMetaLine();
     renderAddGridButton();
     renderDailyTotals();
+    if(agolConfigured()) agolPush(); // fire-and-forget, never blocks the tally itself
     return {ok:true, isMerge, districtSwitchMsg, gridNumber};
   }
 
@@ -3514,6 +3692,9 @@
     document.getElementById('editContinuousTallyMode').value = state.meta.continuousTallyMode ? 'on' : 'off';
     document.getElementById('editCtStickyMinutes').value = String(state.meta.ctStickyMinutes);
     document.getElementById('editBigButtonMode').value = state.meta.bigButtonMode ? 'on' : 'off';
+    document.getElementById('editAgolUrl').value = state.meta.agolSync.featureLayerUrl || '';
+    document.getElementById('editAgolWriteUrl').value = state.meta.agolSync.writeUrl || '';
+    updateAgolSettingsStatusText();
     populateGridPointSelect();
     populateCountFields(state.meta.district || 'apollo');
     document.getElementById('settingsOverlay').classList.add('show');
@@ -3546,6 +3727,14 @@
     state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
     state.meta.ctStickyMinutes = parseFloat(document.getElementById('editCtStickyMinutes').value);
     state.meta.bigButtonMode = document.getElementById('editBigButtonMode').value === 'on';
+    const newAgolUrl = document.getElementById('editAgolUrl').value.trim();
+    const newAgolWriteUrl = document.getElementById('editAgolWriteUrl').value.trim();
+    const agolUrlChanged = newAgolUrl !== state.meta.agolSync.featureLayerUrl || newAgolWriteUrl !== state.meta.agolSync.writeUrl;
+    state.meta.agolSync.featureLayerUrl = newAgolUrl;
+    state.meta.agolSync.writeUrl = newAgolWriteUrl;
+    if(agolUrlChanged){
+      state.meta.agolSync.status = newAgolUrl ? 'syncing' : 'not-configured';
+    }
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
@@ -3563,6 +3752,7 @@
     if(!ok){ showToast('Save FAILED — settings NOT saved, try again'); return; }
     closeSettings();
     showToast('Settings saved');
+    if(agolConfigured()) agolPull();
   }
 
   async function resetAll(){
@@ -4072,6 +4262,8 @@
     setCtGridNumber(e.target.value);
   });
   document.getElementById('ctDeleteLatest').addEventListener('click', ctDeleteLatest);
+  document.getElementById('agolSettingsSyncBtn').addEventListener('click', async ()=>{ await agolPull(); await agolPush(); });
+  document.getElementById('agolBannerSyncBtn').addEventListener('click', async ()=>{ await agolPull(); await agolPush(); });
 
   // ---------- init ----------
   (async function init(){
@@ -4097,6 +4289,7 @@
     renderBeetleLog();
     renderAddGridButton();
     applyMode();
+    if(agolConfigured()){ agolPull(); setInterval(()=>{ agolPull(); agolPush(); }, AGOL_AUTO_SYNC_MS); }
   })();
 
 })();
