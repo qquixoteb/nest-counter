@@ -24,12 +24,24 @@
     --log: #A85D24; --grn: #2F6B41; --kmp: #6B7536; --lth: #4E5B62; --rare: #B83A50; --danger: #A83226;
     --live-red: #C7301F; --excel-green: #1A5C38;
   }
+  /* Subtle district tint — a visual cue for which beach is active beyond the
+     text label alone. Warm amber for Apollo, cool teal for Playalinda; chosen to
+     sit outside the existing species accent hues (log/grn/kmp/lth/rare/danger) so
+     nothing gets confused for a species color. Low-opacity by design — an ambient
+     wash, not a loud color change, so field readability isn't affected. */
+  body.district-apollo{ --district-accent: #9B6FD1; --district-tint: rgba(155,111,209,0.10); }
+  body.district-playalinda{ --district-accent: #D4A017; --district-tint: rgba(212,160,23,0.10); }
+  body.light-mode.district-apollo{ --district-accent: #6B3FA0; --district-tint: rgba(107,63,160,0.07); }
+  body.light-mode.district-playalinda{ --district-accent: #9C7A0C; --district-tint: rgba(156,122,12,0.07); }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    background: radial-gradient(120% 140% at 50% -10%, var(--bg) 0%, var(--bg-grad) 100%);
+    background:
+      radial-gradient(120% 60% at 50% -10%, var(--district-tint, transparent) 0%, transparent 70%),
+      radial-gradient(120% 140% at 50% -10%, var(--bg) 0%, var(--bg-grad) 100%);
     color: var(--ink); font-family: 'Space Grotesk', sans-serif; min-height:100vh;
     padding: 18px 14px 120px; -webkit-tap-highlight-color: transparent;
+    border-top: 4px solid var(--district-accent, transparent);
   }
   .mono{ font-family:'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
 
@@ -763,7 +775,7 @@
       <input type="file" id="backupImportInput" accept=".json" style="display:none;">
     </div>
 
-    <button class="fab" id="saveSettingsBtn" style="z-index:51;">Save</button>
+    <button class="btn btn-primary" id="saveSettingsBtn" style="position:sticky; bottom:calc(14px + env(safe-area-inset-bottom)); width:100%; margin-top:20px; border-radius:14px; padding:16px; font-size:15px; box-shadow:0 8px 24px rgba(0,0,0,0.4); z-index:2;">Save</button>
 
     <div class="settings-group" style="margin-top:22px;">
       <h3>Reset</h3>
@@ -1349,6 +1361,8 @@
   function applyTheme(){
     document.body.classList.toggle('light-mode', !!state.meta.lightMode);
     document.body.classList.toggle('big-buttons', !!state.meta.bigButtonMode);
+    document.body.classList.toggle('district-apollo', state.meta.district==='apollo');
+    document.body.classList.toggle('district-playalinda', state.meta.district==='playalinda');
     const native = isNativeApp();
     document.body.classList.toggle('native-app', native);
     if(native && window.Capacitor.Plugins.StatusBar){
@@ -1490,7 +1504,7 @@
   function renderMetaLine(){
     const el = document.getElementById('metaLine');
     const districtLabel = state.meta.district === 'playalinda' ? 'Playalinda' : 'Apollo';
-    el.textContent = `${state.meta.observer || 'Observer not set'} · ${state.meta.date || '—'} · ${districtLabel} · ${state.meta.runTime || 'Day'}`;
+    el.innerHTML = `${escapeHtml(state.meta.observer || 'Observer not set')} · ${escapeHtml(state.meta.date || '—')} · <span style="color:var(--district-accent); font-weight:700;">${districtLabel}</span> · ${escapeHtml(state.meta.runTime || 'Day')}`;
   }
 
   // ---------- species dashboard ----------
@@ -2089,6 +2103,7 @@
     renderMetaLine();
     renderAddGridButton();
     renderDailyTotals();
+    applyTheme(); // in case the boundary-crossing auto-switch above changed the district, so the visual tint follows it
     return {ok:true, isMerge, districtSwitchMsg, gridNumber};
   }
 
@@ -2686,8 +2701,6 @@
     buttons.forEach(b=>b.textContent = '■ Stop');
   }
 
-  let gridHistoryExpanded = false;
-
   function gridHistoryItemHtml(g){
     const when = new Date(g.ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
     const parts = [];
@@ -2718,27 +2731,73 @@
     </div>`;
   }
 
+  // Tracks each district's own expand/collapse state, and the district active the
+  // last time this rendered — used to detect an actual switch (not just any
+  // re-render) so the newly-active section can be forced open and moved to the
+  // front, and the other forced shut, without overriding a manual toggle on every
+  // unrelated re-render (e.g. after logging a tally in the same district).
+  // Two independent states per district, kept separate on purpose: sectionOpen
+  // controls whether the collapsible section shows its content at all (forced by
+  // a district switch — the active one opens, the other closes), while showAll
+  // controls the "show more/fewer" within an open section (always starts at just
+  // 2, never forced open by a switch — conflating these two used to make the
+  // active district's section show every grid instead of only 2 by default).
+  let gridHistorySectionOpen = { apollo: true, playalinda: false };
+  let gridHistoryShowAll = { apollo: false, playalinda: false };
+  let gridHistoryLastDistrict = null;
+
   function renderGridHistory(){
     const wrap = document.getElementById('gridHistoryList');
-    if(state.grids.length===0){ wrap.innerHTML = '<div class="log-empty">No grids logged yet.</div>'; gridHistoryExpanded = false; return; }
+    const activeDistrict = state.meta.district;
+    const districtLabel = {apollo:'Apollo', playalinda:'Playalinda'};
 
-    const visible = gridHistoryExpanded ? state.grids : state.grids.slice(0,2);
-    let html = visible.map(gridHistoryItemHtml).join('');
-    if(state.grids.length > 2){
-      const hiddenCount = state.grids.length - 2;
-      html += gridHistoryExpanded
-        ? `<button type="button" class="copy-btn" id="gridHistoryToggle" style="width:100%;">Show fewer</button>`
-        : `<button type="button" class="copy-btn" id="gridHistoryToggle" style="width:100%;">Show ${hiddenCount} more</button>`;
+    if(gridHistoryLastDistrict !== null && gridHistoryLastDistrict !== activeDistrict){
+      gridHistorySectionOpen[activeDistrict] = true;
+      gridHistorySectionOpen[gridHistoryLastDistrict] = false;
     }
-    wrap.innerHTML = html;
+    gridHistoryLastDistrict = activeDistrict;
 
-    const toggle = document.getElementById('gridHistoryToggle');
-    if(toggle){
-      toggle.addEventListener('click', ()=>{
-        gridHistoryExpanded = !gridHistoryExpanded;
+    const districts = activeDistrict === 'playalinda' ? ['playalinda','apollo'] : ['apollo','playalinda'];
+
+    const sectionHtml = (districtKey) => {
+      const grids = state.grids.filter(g => (g.district||'apollo') === districtKey);
+      const open = !!gridHistorySectionOpen[districtKey];
+      const showAll = !!gridHistoryShowAll[districtKey];
+      const visible = showAll ? grids : grids.slice(0,2);
+      let itemsHtml = grids.length===0
+        ? '<div class="log-empty">No grids logged yet.</div>'
+        : visible.map(gridHistoryItemHtml).join('');
+      if(grids.length > 2){
+        const hiddenCount = grids.length - 2;
+        itemsHtml += showAll
+          ? `<button type="button" class="copy-btn gh-more-toggle" data-district="${districtKey}" style="width:100%; margin-top:6px;">Show fewer</button>`
+          : `<button type="button" class="copy-btn gh-more-toggle" data-district="${districtKey}" style="width:100%; margin-top:6px;">Show ${hiddenCount} more</button>`;
+      }
+      return `<div style="margin-top:10px;">
+        <button type="button" class="gh-section-toggle" data-district="${districtKey}" style="width:100%; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:12px 14px; font-size:14px; font-weight:600; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+          <span>${districtLabel[districtKey]} Grids Logged (${grids.length})</span><span>${open ? '▾' : '▸'}</span>
+        </button>
+        <div style="display:${open ? 'block' : 'none'}; margin-top:8px;">${itemsHtml}</div>
+      </div>`;
+    };
+
+    wrap.innerHTML = districts.map(sectionHtml).join('');
+
+    wrap.querySelectorAll('.gh-section-toggle').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const d = btn.dataset.district;
+        gridHistorySectionOpen[d] = !gridHistorySectionOpen[d];
         renderGridHistory();
       });
-    }
+    });
+    wrap.querySelectorAll('.gh-more-toggle').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const d = btn.dataset.district;
+        gridHistoryShowAll[d] = !gridHistoryShowAll[d];
+        renderGridHistory();
+      });
+    });
 
     wrap.querySelectorAll('.gh-edit').forEach(b=>{
       b.addEventListener('click', async ()=>{
@@ -4068,6 +4127,15 @@
       state.meta.gridChangeAlert = selectedAlertMode;
     }
     state.meta.continuousTallyMode = document.getElementById('editContinuousTallyMode').value === 'on';
+    if(state.meta.continuousTallyMode && !state.meta.gridAutoFill){
+      const enableToo = confirm(
+        "Continuous Tally Mode relies on GPS to know which grid you're at — without Live Grid Map (GPS auto-fill) also on, the grid number won't update as you move, so you could tally against the wrong grid without realizing it until you check later.\n\nTurn on Live Grid Map too?"
+      );
+      if(enableToo){
+        state.meta.gridAutoFill = true;
+        document.getElementById('editGridAutoFill').value = 'on';
+      }
+    }
     state.meta.ctStickyMinutes = parseFloat(document.getElementById('editCtStickyMinutes').value);
     state.meta.bigButtonMode = document.getElementById('editBigButtonMode').value === 'on';
     state.meta.agolSync.enabled = document.getElementById('editAgolEnabled').value === 'on';
@@ -4092,6 +4160,7 @@
     renderSpeciesGrid();
     renderMetaLine();
     renderAddGridButton();
+    renderGridHistory();
     applyMode();
     if(!ok){ showToast('Save FAILED — settings NOT saved, try again'); return; }
     closeSettings();
