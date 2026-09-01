@@ -69,6 +69,11 @@
   .card{ background: var(--surface); border:1px solid var(--line); border-radius: var(--radius); padding:14px; position:relative; overflow:hidden; transition: box-shadow .25s ease, border-color .25s ease; }
   .card .accent-bar{ position:absolute; left:0; top:0; bottom:0; width:4px; }
   .card.flash{ animation: flashcard 900ms ease-out; border-color: var(--gold); }
+  /* If a user tabs into a button inside a flashing card, the card's own glow
+     shares the same gold hue as the focus outline and could visually blend with
+     it — pausing the card's animation while a descendant is keyboard-focused
+     keeps the outline unambiguous. */
+  .card.flash:has(:focus-visible){ animation: none; box-shadow: none; }
   @keyframes flashcard{ 0%{ box-shadow: 0 0 0 0 rgba(244,185,66,0.55); } 40%{ box-shadow: 0 0 0 8px rgba(244,185,66,0.12); } 100%{ box-shadow: 0 0 0 0 rgba(244,185,66,0); } }
   @media (prefers-reduced-motion: reduce){ .card.flash{ animation:none; border-color:var(--gold); } }
 
@@ -120,6 +125,10 @@
   .new-day-btn{ width:100%; background:transparent; border:1px solid var(--rare); color:var(--rare); border-radius:12px; padding:12px; font-size:13.5px; font-weight:600; cursor:pointer; margin-top:10px; }
   .new-day-hint{ font-size:11px; color:var(--ink-muted); text-align:center; margin-top:6px; line-height:1.4; padding:0 8px; }
   .fab{ position:fixed; left:14px; right:14px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index:40; background:var(--gold); color:#2A1D05; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  /* "Sinking" pressed-in state for sync buttons while a sync is in progress —
+     visual feedback plus pointer-events:none so rapid repeat taps don't fire
+     overlapping requests. */
+  .sync-busy{ transform: scale(0.94); opacity: 0.6; filter: saturate(0.6); pointer-events: none; cursor: default; transition: transform .15s ease, opacity .15s ease; }
 
   .overlay{ position:fixed; inset:0; background:rgba(6,16,17,0.72); display:flex; align-items:flex-end; z-index:50; opacity:0; pointer-events:none; transition:opacity .2s ease; }
   .overlay.show{ opacity:1; pointer-events:auto; }
@@ -149,6 +158,12 @@
   .btn-primary{ background:var(--gold); color:#2A1D05; flex:1.4; }
 
   .settings-group{ margin-bottom:20px; }
+  /* Utility classes for patterns that repeated identically across several
+     modals/sections — extracted so a future style change only needs one edit. */
+  .hint-text{ font-size:11.5px; color:var(--ink-muted); margin-bottom:10px; }
+  .hint-text-tight{ font-size:11.5px; color:var(--ink-muted); margin-bottom:3px; }
+  .section-spaced{ margin-top:22px; }
+  .item-subtext{ font-weight:400; color:var(--ink-muted); font-size:11px; }
   .settings-group h3{ font-size:12px; text-transform:uppercase; letter-spacing:0.6px; color:var(--ink-muted); margin:0 0 10px; font-family:'IBM Plex Mono',monospace;}
   .settings-row{ display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); }
   .settings-row:last-child{ border-bottom:none; }
@@ -260,7 +275,7 @@
 <div class="daily-totals grid-live-box" style="text-align:left;">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
     <div style="flex:1; min-width:140px;">
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatus">—</div>
+      <div class="hint-text-tight" id="gridMapStatus">—</div>
       <div class="grid-live-result" id="gridLiveResult">—</div>
     </div>
     <button type="button" class="copy-btn" id="toggleGridTrackingBtn">▶ Start</button>
@@ -414,7 +429,7 @@
   <div class="sheet">
     <div class="sheet-head"><h2>Add Grid Tally</h2><button class="close-x" id="gridTallyClose">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusGridTally">—</div>
+      <div class="hint-text-tight" id="gridMapStatusGridTally">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div class="grid-live-result" id="gridLiveResultGridTally">—</div>
         <button type="button" class="copy-btn" id="toggleGridTrackingBtnGridTally">▶ Start</button>
@@ -442,7 +457,7 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="captureTitle">Index Nest</h2><button class="close-x" id="captureClose">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusCapture">—</div>
+      <div class="hint-text-tight" id="gridMapStatusCapture">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div class="grid-live-result" id="gridLiveResultCapture">—</div>
         <button type="button" class="copy-btn" id="toggleGridTrackingBtnCapture">▶ Start</button>
@@ -454,14 +469,7 @@
     </div>
     <div class="field" id="manualSpeciesWrap" style="display:none;">
       <label>Species</label>
-      <select id="manualCaptureSpecies">
-        <option value="" disabled selected>Select species…</option>
-        <option value="loggerhead">Loggerhead</option>
-        <option value="green">Green</option>
-        <option value="leatherback">Leatherback</option>
-        <option value="kemps">Kemp's Ridley</option>
-        <option value="other">Other (specify)</option>
-      </select>
+      <select id="manualCaptureSpecies"></select>
     </div>
     <div class="field" id="manualOtherNameWrap" style="display:none;">
       <label>Species name</label>
@@ -494,15 +502,7 @@
     </div>
     <div class="field">
       <label>Disturbance code</label>
-      <select id="captureDisturbance">
-        <option value="">None</option>
-        <option value="F">F — Hog</option>
-        <option value="R">R — Raccoon</option>
-        <option value="Q">Q — Turtle</option>
-        <option value="X">X — Ghost crab</option>
-        <option value="W">W — Coyote</option>
-        <option value="O">O — Other (specify)</option>
-      </select>
+      <select id="captureDisturbance"></select>
     </div>
     <div class="field" id="captureDisturbanceOtherWrap" style="display:none;">
       <label>Specify disturbance</label>
@@ -535,7 +535,7 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="subsequentTitle">Subsequent Sighting</h2><button class="close-x" id="subsequentClose">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
-      <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSubsequent">—</div>
+      <div class="hint-text-tight" id="gridMapStatusSubsequent">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div class="grid-live-result" id="gridLiveResultSubsequent">—</div>
         <button type="button" class="copy-btn" id="toggleGridTrackingBtnSubsequent">▶ Start</button>
@@ -544,15 +544,7 @@
     <div class="queue-note" id="subQueueNote" style="display:none;"></div>
     <div class="field">
       <label>Species</label>
-      <select id="subSpecies">
-        <option value="" disabled selected>Select species…</option>
-        <option value="loggerhead">Loggerhead</option>
-        <option value="green">Green</option>
-        <option value="leatherback">Leatherback</option>
-        <option value="kemps">Kemp's Ridley</option>
-        <option value="unknown">Unknown</option>
-        <option value="other">Other (specify)</option>
-      </select>
+      <select id="subSpecies"></select>
     </div>
     <div class="field" id="subOtherNameWrap" style="display:none;">
       <label>Species name</label>
@@ -580,15 +572,7 @@
     </div>
     <div class="field">
       <label>Disturbance code</label>
-      <select id="subDisturbanceCode">
-        <option value="">Select…</option>
-        <option value="F">F — Hog</option>
-        <option value="R">R — Raccoon</option>
-        <option value="Q">Q — Turtle</option>
-        <option value="X">X — Ghost crab</option>
-        <option value="W">W — Coyote</option>
-        <option value="O">O — Other (specify)</option>
-      </select>
+      <select id="subDisturbanceCode"></select>
     </div>
     <div class="field" id="subDisturbanceOtherWrap" style="display:none;">
       <label>Specify disturbance</label>
@@ -596,15 +580,7 @@
     </div>
     <div class="field">
       <label>Secondary disturbance code (optional)</label>
-      <select id="subDisturbanceCode2">
-        <option value="">None</option>
-        <option value="F">F — Hog</option>
-        <option value="R">R — Raccoon</option>
-        <option value="Q">Q — Turtle</option>
-        <option value="X">X — Ghost crab</option>
-        <option value="W">W — Coyote</option>
-        <option value="O">O — Other (specify)</option>
-      </select>
+      <select id="subDisturbanceCode2"></select>
     </div>
     <div class="field" id="subDisturbanceOther2Wrap" style="display:none;">
       <label>Specify secondary disturbance</label>
@@ -624,14 +600,7 @@
     <div class="sheet-head"><h2 id="nestInventoryTitle">Add Nest Inventory</h2><button class="close-x" id="nestInventoryClose">✕</button></div>
     <div class="field"><label>Grid</label><input type="text" id="niGrid" placeholder="e.g. 14"></div>
     <div class="field"><label>Species</label>
-      <select id="niSpecies">
-        <option value="" disabled selected>Select species…</option>
-        <option value="loggerhead">Loggerhead</option>
-        <option value="green">Green</option>
-        <option value="leatherback">Leatherback</option>
-        <option value="kemps">Kemp's Ridley</option>
-        <option value="other">Other (specify)</option>
-      </select>
+      <select id="niSpecies"></select>
     </div>
     <div class="field" id="niOtherNameWrap" style="display:none;"><label>Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
     <div class="field"><label>Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
@@ -693,7 +662,7 @@
       <div class="settings-row"><span style="color:var(--lth); font-weight:600; font-size:15px;">Leatherback</span><input type="number" id="editLth"></div>
       <div class="settings-row"><span style="color:var(--kmp); font-weight:600; font-size:15px;">Kemp's Ridley</span><input type="number" id="editKmp"></div>
       <div id="fixStartSection" style="display:none; margin-top:14px;">
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Correcting a starting-count mistake after already tallying today — enter what the starting count should have been, and it recalculates the total by preserving today's already-tallied nests, without re-triggering any index nest captures.</div>
+        <div class="hint-text">Correcting a starting-count mistake after already tallying today — enter what the starting count should have been, and it recalculates the total by preserving today's already-tallied nests, without re-triggering any index nest captures.</div>
         <div style="display:flex; flex-wrap:wrap; gap:8px;">
           <button type="button" class="fix-start-btn" data-species="green" data-label="Green">Fix Green start</button>
           <button type="button" class="fix-start-btn" data-species="loggerhead" data-label="Loggerhead">Fix Loggerhead start</button>
@@ -709,7 +678,7 @@
     <div id="advancedSettingsContent" style="display:none;">
       <div class="settings-group" style="margin-top:14px;">
         <h3>Grid map</h3>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">When on, opening Add Grid Tally auto-fills the grid you were previously in (based on live GPS), and Subsequent Sighting auto-fills the grid you're currently in. Requires grid tracking (below) to be running. Off by default — always double-check before saving.</div>
+        <div class="hint-text">When on, opening Add Grid Tally auto-fills the grid you were previously in (based on live GPS), and Subsequent Sighting auto-fills the grid you're currently in. Requires grid tracking (below) to be running. Off by default — always double-check before saving.</div>
         <div class="field"><label>Auto-fill grid from GPS</label>
           <select id="editGridAutoFill"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
@@ -729,9 +698,9 @@
           <select id="editBigButtonMode"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
       </div>
-      <div class="settings-group" style="margin-top:22px;">
+      <div class="settings-group section-spaced">
         <h3>Master species totals</h3>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Syncs Loggerhead/Green/Leatherback/Kemp's running counts directly with the OneDrive master file, via two Power Automate flows — one reads, one writes. Staff editing that file directly (paper data entry) are automatically reflected the next time this app reads, since there's only one copy of the data, not a separate synced copy. Only Export writes to the master — Sync Now, Start New Day, and the tappable sync indicator at the top only ever read. This only ever warns if the connection is stale or unreachable — it never blocks tallying.</div>
+        <div class="hint-text">Syncs Loggerhead/Green/Leatherback/Kemp's running counts directly with the OneDrive master file, via two Power Automate flows — one reads, one writes. Staff editing that file directly (paper data entry) are automatically reflected the next time this app reads, since there's only one copy of the data, not a separate synced copy. Only Export writes to the master — Sync Now, Start New Day, and the tappable sync indicator at the top only ever read. This only ever warns if the connection is stale or unreachable — it never blocks tallying.</div>
         <div class="field"><label>Sync with master species totals</label>
           <select id="editAgolEnabled"><option value="on">On (default)</option><option value="off">Off</option></select>
         </div>
@@ -743,15 +712,15 @@
         </div>
         <div style="margin-top:6px;"><span id="agolSettingsStatus" style="font-size:11px; color:var(--ink-muted);">Not configured</span></div>
       </div>
-      <div class="settings-group" style="margin-top:22px;">
+      <div class="settings-group section-spaced">
         <h3>Recent surveys</h3>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">A compact record of past survey days, kept on this device for 30 days after each "Start New Day." Species totals only — not full grid-by-grid detail.</div>
+        <div class="hint-text">A compact record of past survey days, kept on this device for 30 days after each "Start New Day." Species totals only — not full grid-by-grid detail.</div>
         <div id="surveyHistoryList" style="font-size:12.5px; color:var(--ink-muted);">No recent surveys yet.</div>
       </div>
-      <div class="settings-group" style="margin-top:22px;">
+      <div class="settings-group section-spaced">
         <h3>Grid map</h3>
         <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
-          <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;" id="gridMapStatusSettings">—</div>
+          <div class="hint-text-tight" id="gridMapStatusSettings">—</div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <div class="grid-live-result" id="gridLiveResultSettings">—</div>
             <button type="button" class="copy-btn" id="toggleGridTrackingBtnSettings">▶ Start</button>
@@ -766,9 +735,9 @@
         <button class="reset-btn" id="addNewGridPostBtn" style="margin-bottom:8px;">＋ Add New Grid Post</button>
         <button class="reset-btn" id="resetGridMapBtn">Reset to built-in grid map</button>
       </div>
-      <div class="settings-group" style="margin-top:22px;">
+      <div class="settings-group section-spaced">
         <h3>Backup</h3>
-        <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:10px;">Saves everything — counts, next-index numbers, grid history, index nests, subsequent sightings. Use this to move your season's data to a new copy of this tool (like the hosted version) rather than re-entering it by hand.</div>
+        <div class="hint-text">Saves everything — counts, next-index numbers, grid history, index nests, subsequent sightings. Use this to move your season's data to a new copy of this tool (like the hosted version) rather than re-entering it by hand.</div>
         <button class="reset-btn" id="exportBackupBtn" style="border-color:var(--gold); color:var(--gold); margin-bottom:8px;">Export Backup (JSON)</button>
         <button class="reset-btn" id="importBackupBtn">Import Backup (JSON)</button>
       </div>
@@ -777,7 +746,7 @@
 
     <button class="btn btn-primary" id="saveSettingsBtn" style="position:sticky; bottom:calc(14px + env(safe-area-inset-bottom)); width:100%; margin-top:20px; border-radius:14px; padding:16px; font-size:15px; box-shadow:0 8px 24px rgba(0,0,0,0.4); z-index:2;">Save</button>
 
-    <div class="settings-group" style="margin-top:22px;">
+    <div class="settings-group section-spaced">
       <h3>Reset</h3>
       <button class="reset-btn" id="resetAllBtn">Reset all data on this device</button>
     </div>
@@ -800,6 +769,44 @@
   ];
   const FIXED_TALLY_SPECIES = SPECIES.filter(m=>m.fixedInGridForm);
 
+  // Single source of truth for the disturbance code list — was previously
+  // hardcoded as identical <option> lists in three separate modals (capture,
+  // subsequent sighting x2), risking a mismatch if the codes ever changed.
+  const DISTURBANCE_CODES = [
+    {value:'F', label:'F — Hog'},
+    {value:'R', label:'R — Raccoon'},
+    {value:'Q', label:'Q — Turtle'},
+    {value:'X', label:'X — Ghost crab'},
+    {value:'W', label:'W — Coyote'},
+    {value:'O', label:'O — Other (specify)'},
+  ];
+
+  // Populates a species <select> from the single SPECIES source of truth above —
+  // was previously hardcoded per-modal. Contexts genuinely differ (Subsequent
+  // Sighting needs an "Unknown" option the others don't), so those differences
+  // are parameters here rather than being lost in a naive merge.
+  function populateSpeciesSelect(selectId, opts={}){
+    const el = document.getElementById(selectId);
+    if(!el) return;
+    const { includeUnknown=false, includeOther=true, placeholderText='Select species…' } = opts;
+    let html = `<option value="" disabled selected>${placeholderText}</option>`;
+    SPECIES.forEach(s => { html += `<option value="${s.id}">${s.label}</option>`; });
+    if(includeUnknown) html += `<option value="unknown">Unknown</option>`;
+    if(includeOther) html += `<option value="other">Other (specify)</option>`;
+    el.innerHTML = html;
+  }
+
+  // Populates a disturbance-code <select> from DISTURBANCE_CODES above. The
+  // placeholder text genuinely differs per context ("None" vs "Select…"), so
+  // that's a parameter rather than assumed identical.
+  function populateDisturbanceSelect(selectId, placeholderText='None'){
+    const el = document.getElementById(selectId);
+    if(!el) return;
+    let html = `<option value="">${placeholderText}</option>`;
+    DISTURBANCE_CODES.forEach(c => { html += `<option value="${c.value}">${c.label}</option>`; });
+    el.innerHTML = html;
+  }
+
   let state = null;
   let captureQueue = [];
   let subsequentQueue = [];
@@ -821,7 +828,10 @@
   function dateInputToTs(dateInputValue){
     const parts = (dateInputValue||'').split('-');
     if(parts.length!==3) return new Date().toISOString();
-    const d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+    const y = parseInt(parts[0],10), mo = parseInt(parts[1],10), da = parseInt(parts[2],10);
+    if(!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(da)) return new Date().toISOString();
+    const d = new Date(y, mo-1, da);
+    if(isNaN(d.getTime())) return new Date().toISOString();
     return d.toISOString();
   }
   // The calendar day immediately before dateStr (YYYY-MM-DD), computed via local
@@ -863,7 +873,7 @@
         agolSync: {
           featureLayerUrl:'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/b0a989902de94e2e80198d0364db6d5d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ah7nWDQBm2IgPE1h8nJthUkrG670cw1kiUQo3ZD_jv4',
           writeUrl:'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/f0d0d0c854e1416dae523eda20ac1b09/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=--TIymtR-XTQbU3ZoPAhaYCLMTD-18thzoqFIoq0390',
-          enabled:true, lastSync:null, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissed:false
+          enabled:true, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null
         } },
       species:{
         apollo: defaultSpeciesSet(),
@@ -910,7 +920,7 @@
     const DEFAULT_AGOL_READ_URL = 'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/b0a989902de94e2e80198d0364db6d5d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ah7nWDQBm2IgPE1h8nJthUkrG670cw1kiUQo3ZD_jv4';
     const DEFAULT_AGOL_WRITE_URL = 'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/f0d0d0c854e1416dae523eda20ac1b09/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=--TIymtR-XTQbU3ZoPAhaYCLMTD-18thzoqFIoq0390';
     if(!meta.agolSync || typeof meta.agolSync !== 'object'){
-      meta.agolSync = { featureLayerUrl: DEFAULT_AGOL_READ_URL, writeUrl: DEFAULT_AGOL_WRITE_URL, lastSync:null, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissed:false };
+      meta.agolSync = { featureLayerUrl: DEFAULT_AGOL_READ_URL, writeUrl: DEFAULT_AGOL_WRITE_URL, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null };
     }
     // Backfill the baked-in defaults for an existing install that saved empty URLs
     // before this update — but never overwrite a URL someone already set manually.
@@ -918,8 +928,38 @@
     if(meta.agolSync.writeUrl === undefined || meta.agolSync.writeUrl === '') meta.agolSync.writeUrl = DEFAULT_AGOL_WRITE_URL;
     if(meta.agolSync.lastActionType === undefined) meta.agolSync.lastActionType = null;
     if(meta.agolSync.lastActionDate === undefined) meta.agolSync.lastActionDate = null;
-    if(meta.agolSync.warningDismissed === undefined) meta.agolSync.warningDismissed = false;
+    // Old boolean field renamed/redesigned into a date — a dismissal (or a sync,
+    // which also counts as dismissal) only suppresses the warning for the rest of
+    // that calendar day, so it naturally becomes eligible again on a new day
+    // rather than being silenced forever after just one sync.
+    if(meta.agolSync.warningDismissedDate === undefined) meta.agolSync.warningDismissedDate = null;
+    delete meta.agolSync.warningDismissed;
     if(meta.agolSync.enabled === undefined) meta.agolSync.enabled = true;
+    // lastSync (old, single timestamp) -> lastChecked (renamed for clarity, same
+    // meaning), plus two new fields: lastAccepted (only set when a pull/push
+    // actually changed something) and masterLastUpdated (the master's own actual
+    // data age, not just when we last successfully reached the endpoint) — an
+    // existing install's old lastSync value is carried over as a reasonable
+    // starting point for lastChecked rather than discarded.
+    if(meta.agolSync.lastChecked === undefined){
+      meta.agolSync.lastChecked = meta.agolSync.lastSync !== undefined ? meta.agolSync.lastSync : null;
+    }
+    delete meta.agolSync.lastSync;
+    if(meta.agolSync.lastAccepted === undefined) meta.agolSync.lastAccepted = null;
+    // Was a single global masterLastUpdated (most recent across both districts) —
+    // redesigned to be per-district, since a device working Apollo shouldn't show
+    // stale/fresh based on when Playalinda happened to last update, and vice versa.
+    // An existing install's old single value gets carried over as a starting point
+    // for whichever district it was actually observing (best guess: the district
+    // selected at the time), rather than discarded outright.
+    if(meta.agolSync.masterLastUpdatedByDistrict === undefined || typeof meta.agolSync.masterLastUpdatedByDistrict !== 'object'){
+      const legacyValue = meta.agolSync.masterLastUpdated || null;
+      meta.agolSync.masterLastUpdatedByDistrict = {
+        apollo: meta.district==='apollo' ? legacyValue : null,
+        playalinda: meta.district==='playalinda' ? legacyValue : null
+      };
+    }
+    delete meta.agolSync.masterLastUpdated;
     // One-time forced switch to light mode for existing installs (better sunlight
     // readability) — only fires once, tracked by this flag, so the toggle in
     // Settings still works normally afterward and won't keep getting overridden.
@@ -967,7 +1007,6 @@
   // district at a time" (per Quinn) means no concurrent-write conflict resolution
   // is needed here either — a simple take-the-max-count merge is safe, matching
   // the same merge rule the script itself uses between the Sheet and OneDrive.
-  const AGOL_STALE_MS = 12 * 60 * 60 * 1000; // warn if no successful sync in this long
 
   function agolConfigured(){
     return !!(state.meta.agolSync && state.meta.agolSync.enabled && state.meta.agolSync.featureLayerUrl);
@@ -981,6 +1020,71 @@
   function surveyHasStarted(){
     const today = state.meta.date;
     return state.grids.some(g => dateInputStr(g.ts) === today);
+  }
+
+  // Strict district/species parsing — anything that doesn't exactly match a known
+  // value returns null rather than silently defaulting (e.g. a typo'd district
+  // guessed as Apollo), so a malformed master row can be caught and reported
+  // rather than quietly misattributing data.
+  const DISTRICT_KEYS = ['apollo','playalinda'];
+  const SPECIES_KEYS = ['loggerhead','green','leatherback','kemps'];
+  const EXPECTED_ROW_KEYS = DISTRICT_KEYS.flatMap(d => SPECIES_KEYS.map(s => `${d}|${s}`));
+
+  function parseDistrictStrict(raw){
+    const s = String(raw||'').trim().toLowerCase();
+    if(s === 'apollo') return 'apollo';
+    if(s === 'playalinda') return 'playalinda';
+    return null;
+  }
+  function parseSpeciesStrict(raw){
+    const s = String(raw||'').trim().toLowerCase();
+    if(s === 'loggerhead') return 'loggerhead';
+    if(s === 'green') return 'green';
+    if(s === 'leatherback') return 'leatherback';
+    if(s === "kemp's ridley" || s === 'kemps') return 'kemps';
+    return null;
+  }
+
+  // Parses the master's rows into a "districtKey|speciesKey" -> row map, requiring
+  // EXACTLY the 8 expected combinations — no missing, duplicate, or unrecognized
+  // rows. Fails loudly (with a diagnostic listing exactly what's wrong) rather than
+  // silently proceeding with partial or misattributed data.
+  function parseAndValidateMasterRows(rows){
+    const byKey = {};
+    const problems = [];
+    rows.forEach((row, i) => {
+      const d = parseDistrictStrict(row.District);
+      const s = parseSpeciesStrict(row.Species);
+      if(!d || !s){
+        problems.push(`row ${i+1}: unrecognized District/Species ("${row.District}" / "${row.Species}")`);
+        return;
+      }
+      const key = `${d}|${s}`;
+      if(byKey[key]) problems.push(`duplicate row for ${key}`);
+      byKey[key] = row;
+    });
+    const missing = EXPECTED_ROW_KEYS.filter(k => !byKey[k]);
+    if(missing.length>0) problems.push(`missing row(s) for: ${missing.join(', ')}`);
+    if(problems.length>0) throw new Error(`Master table validation failed — ${problems.join('; ')}`);
+    return byKey;
+  }
+
+  // Most recent LastUpdated ("YYYY-MM-DD") per district, from an already-validated
+  // byKey map — kept separate per district so the staleness indicator reflects the
+  // district actually being worked, not whichever one happened to update most
+  // recently overall (a fresh Apollo update shouldn't make a stale Playalinda look
+  // fine, or vice versa).
+  function computeMostRecentByDistrict(byKey){
+    const result = {apollo: null, playalinda: null};
+    EXPECTED_ROW_KEYS.forEach(key=>{
+      const [districtKey] = key.split('|');
+      const row = byKey[key];
+      if(!row || !row.LastUpdated) return;
+      const s = String(row.LastUpdated).slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(s)) return;
+      if(!result[districtKey] || s > result[districtKey]) result[districtKey] = s;
+    });
+    return result;
   }
 
   // Talks to Power Automate's HTTP-triggered flow directly — the URL itself is a
@@ -1008,6 +1112,19 @@
     return true;
   }
 
+  // Puts every sync button into a visibly "sunk"/pressed, non-interactive state
+  // while a sync is running, and back to normal once it's done — so a user
+  // tapping it repeatedly can't fire overlapping requests, with clear feedback
+  // that something is already happening.
+  function setSyncButtonsBusy(busy){
+    ['agolSettingsSyncBtn','agolSettingsWriteBtn','agolWarningSyncBtn','agolStatusBar'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.classList.toggle('sync-busy', busy);
+      if('disabled' in el) el.disabled = busy;
+    });
+  }
+
   async function agolPull(){
     if(!agolConfigured()) return false;
     if(surveyHasStarted()){
@@ -1016,9 +1133,12 @@
     }
     state.meta.agolSync.status = 'syncing';
     updateAgolBannerUI();
+    setSyncButtonsBusy(true);
     try{
       const rows = await agolQuery();
       if(rows.length===0) throw new Error('No rows returned');
+      const byKey = parseAndValidateMasterRows(rows); // throws with a diagnostic if the table doesn't have exactly the 8 expected rows
+      const mostRecentByDistrict = computeMostRecentByDistrict(byKey);
 
       // LastUpdated is a plain "YYYY-MM-DD" string, compared directly rather than
       // parsed into a Date — new Date("YYYY-MM-DD") parses as UTC midnight, which
@@ -1041,11 +1161,9 @@
       // own, but the user can explicitly override that protection here).
       const increases = [];
       const decreases = [];
-      rows.forEach(row=>{
-        const districtKey = String(row.District||'').toLowerCase()==='playalinda' ? 'playalinda' : 'apollo';
-        const speciesRaw = String(row.Species||'').toLowerCase();
-        const speciesKey = speciesRaw.includes('logger')?'loggerhead':speciesRaw.includes('green')?'green':speciesRaw.includes('leather')?'leatherback':speciesRaw.includes('kemp')?'kemps':null;
-        if(!speciesKey) return;
+      EXPECTED_ROW_KEYS.forEach(key=>{
+        const row = byKey[key];
+        const [districtKey, speciesKey] = key.split('|');
         const remoteCount = Number(row.RunningTotal);
         if(!Number.isFinite(remoteCount) || remoteCount < 0) return;
         const sp = state.species[districtKey][speciesKey];
@@ -1094,17 +1212,27 @@
         });
       }
 
-      state.meta.agolSync.lastSync = new Date().toISOString();
+      const appliedCount = (applyIncreases ? increases.length : 0) + (applyDecreases ? decreases.length : 0);
+
+      // lastChecked always updates on a successful request — this device DID reach
+      // the endpoint. masterLastUpdatedByDistrict always updates for both
+      // districts too, since it reflects what we observed regardless of our own
+      // accept/decline choice. lastAccepted only updates if something was
+      // actually applied — a pull the user fully declined shouldn't claim the
+      // device's baseline just got refreshed.
+      state.meta.agolSync.lastChecked = new Date().toISOString();
+      if(mostRecentByDistrict.apollo) state.meta.agolSync.masterLastUpdatedByDistrict.apollo = mostRecentByDistrict.apollo;
+      if(mostRecentByDistrict.playalinda) state.meta.agolSync.masterLastUpdatedByDistrict.playalinda = mostRecentByDistrict.playalinda;
+      if(appliedCount>0) state.meta.agolSync.lastAccepted = new Date().toISOString();
       state.meta.agolSync.lastActionType = 'read';
       state.meta.agolSync.lastActionDate = state.meta.date;
       state.meta.agolSync.status = 'fresh';
       state.meta.agolSync.lastError = null;
-      state.meta.agolSync.warningDismissed = false;
+      state.meta.agolSync.warningDismissedDate = todayStr(); // a sync dismisses the warning too, same as tapping the ✕ — resets naturally on a new day rather than being silenced forever
       await saveState();
       renderSpeciesGrid();
       renderMetaLine();
       updateAgolBannerUI();
-      const appliedCount = (applyIncreases ? increases.length : 0) + (applyDecreases ? decreases.length : 0);
       if(increases.length>0 || decreases.length>0){
         showToast(appliedCount>0 ? 'Master species totals synced' : "Sync completed — kept this device's counts");
       }
@@ -1114,6 +1242,8 @@
       state.meta.agolSync.lastError = String(err.message||err);
       updateAgolBannerUI();
       return false;
+    }finally{
+      setSyncButtonsBusy(false);
     }
   }
 
@@ -1146,6 +1276,8 @@
 
   async function agolPush(){
     if(!agolConfigured()) return false;
+    setSyncButtonsBusy(true);
+    try{
 
     const districtLabel = {apollo:'Apollo', playalinda:'Playalinda'};
     const speciesLabel = {loggerhead:'Loggerhead', green:'Green', leatherback:'Leatherback', kemps:"Kemp's Ridley"};
@@ -1153,22 +1285,28 @@
 
     try{
       const currentRows = await agolQuery();
+      const byKey = parseAndValidateMasterRows(currentRows); // throws with a diagnostic if the table doesn't have exactly the 8 expected rows
+      const mostRecentByDistrict = computeMostRecentByDistrict(byKey);
+
       // LastUpdated is a plain "YYYY-MM-DD" string — compared directly rather than
       // parsed into a Date, for the same timezone-safety reason as in agolPull().
       let mostRecentUpdateStr = null;
-      const masterCounts = {}; // "districtKey|speciesKey" -> RunningTotal
       currentRows.forEach(row=>{
-        if(row.LastUpdated){
-          const s = String(row.LastUpdated).slice(0,10);
-          if(/^\d{4}-\d{2}-\d{2}$/.test(s) && (!mostRecentUpdateStr || s > mostRecentUpdateStr)) mostRecentUpdateStr = s;
-        }
-        const districtKey = String(row.District||'').toLowerCase()==='playalinda' ? 'playalinda' : 'apollo';
-        const speciesRaw = String(row.Species||'').toLowerCase();
-        const speciesKey = speciesRaw.includes('logger')?'loggerhead':speciesRaw.includes('green')?'green':speciesRaw.includes('leather')?'leatherback':speciesRaw.includes('kemp')?'kemps':null;
-        if(speciesKey){
-          const remoteCount = Number(row.RunningTotal);
-          if(Number.isFinite(remoteCount)) masterCounts[`${districtKey}|${speciesKey}`] = remoteCount;
-        }
+        if(!row.LastUpdated) return;
+        const s = String(row.LastUpdated).slice(0,10);
+        if(/^\d{4}-\d{2}-\d{2}$/.test(s) && (!mostRecentUpdateStr || s > mostRecentUpdateStr)) mostRecentUpdateStr = s;
+      });
+      // This is also a genuine successful read of the master — worth recording so
+      // the staleness indicator stays accurate even for someone who only ever taps
+      // "Up" (write) without a separate explicit read first.
+      state.meta.agolSync.lastChecked = new Date().toISOString();
+      if(mostRecentByDistrict.apollo) state.meta.agolSync.masterLastUpdatedByDistrict.apollo = mostRecentByDistrict.apollo;
+      if(mostRecentByDistrict.playalinda) state.meta.agolSync.masterLastUpdatedByDistrict.playalinda = mostRecentByDistrict.playalinda;
+
+      const masterCounts = {}; // "districtKey|speciesKey" -> RunningTotal
+      EXPECTED_ROW_KEYS.forEach(key=>{
+        const remoteCount = Number(byKey[key].RunningTotal);
+        if(Number.isFinite(remoteCount)) masterCounts[key] = remoteCount;
       });
 
       // Three distinct kinds of concern, each with its own tailored prompt rather
@@ -1225,12 +1363,19 @@
     }
     try{
       await agolApplyEdits(updates);
-      state.meta.agolSync.lastSync = new Date().toISOString();
+      state.meta.agolSync.lastChecked = new Date().toISOString();
+      state.meta.agolSync.lastAccepted = new Date().toISOString(); // a successful write means the master now reflects this device's baseline
+      // Only the district(s) actually written just got a new LastUpdated value —
+      // an unwritten district (e.g. a single-beach day, not a full beach run)
+      // keeps whatever age it already had, not today's date.
+      districtsToWrite.forEach(districtKey=>{
+        state.meta.agolSync.masterLastUpdatedByDistrict[districtKey] = state.meta.date;
+      });
       state.meta.agolSync.lastActionType = 'write';
       state.meta.agolSync.lastActionDate = state.meta.date;
       state.meta.agolSync.status = 'fresh';
       state.meta.agolSync.lastError = null;
-      state.meta.agolSync.warningDismissed = false;
+      state.meta.agolSync.warningDismissedDate = todayStr(); // a sync dismisses the warning too, same as tapping the ✕ — resets naturally on a new day rather than being silenced forever
       await saveState();
       updateAgolBannerUI();
       return true;
@@ -1240,29 +1385,59 @@
       updateAgolBannerUI();
       return false;
     }
+
+    }finally{
+      setSyncButtonsBusy(false);
+    }
   }
 
+  // Staleness is based on the MASTER's own actual data age for the CURRENTLY
+  // SELECTED district specifically (masterLastUpdatedByDistrict[state.meta.district]),
+  // not a global value — a fresh Apollo update shouldn't make a stale Playalinda
+  // look fine while Playalinda is selected, or vice versa. Also not based on when
+  // this device last successfully reached the endpoint — those are different
+  // things: a flow that keeps returning 200 with 9-day-old data would otherwise
+  // show "Fresh" the whole time. More than 1 day old (not today or yesterday)
+  // counts as stale.
   function agolIsStale(){
     const m = state.meta.agolSync;
-    if(!m.lastSync) return true;
-    return (Date.now() - new Date(m.lastSync).getTime()) > AGOL_STALE_MS;
+    const districtDate = m.masterLastUpdatedByDistrict && m.masterLastUpdatedByDistrict[state.meta.district];
+    if(!districtDate) return true;
+    const parts = districtDate.split('-');
+    if(parts.length!==3) return true;
+    const masterTime = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10)).getTime();
+    if(isNaN(masterTime)) return true;
+    const todayParts = todayStr().split('-');
+    const todayTime = new Date(parseInt(todayParts[0],10), parseInt(todayParts[1],10)-1, parseInt(todayParts[2],10)).getTime();
+    const ageDays = Math.round((todayTime - masterTime) / (24*60*60*1000));
+    return ageDays > 1;
   }
 
   function updateAgolSettingsStatusText(){
     const el = document.getElementById('agolSettingsStatus');
     if(!el) return;
     const m = state.meta.agolSync;
-    if(!m.featureLayerUrl) el.textContent = 'Not configured';
-    else if(m.status==='syncing') el.textContent = 'Syncing…';
-    else if(m.status==='fresh' && !agolIsStale()) el.textContent = `Synced · ${new Date(m.lastSync).toLocaleTimeString()}`;
-    else if(m.status==='error') el.textContent = `Error: ${m.lastError||'unknown'}`;
-    else el.textContent = `Stale — last synced ${m.lastSync ? new Date(m.lastSync).toLocaleString() : 'never'}`;
+    if(!m.featureLayerUrl){ el.textContent = 'Not configured'; return; }
+    if(m.status==='syncing'){ el.textContent = 'Syncing…'; return; }
+    if(m.status==='error'){ el.textContent = `Error: ${m.lastError||'unknown'}`; return; }
+    // Two separate timestamps, shown separately on purpose — "checked" only means
+    // this device successfully talked to the endpoint; "accepted" means a pulled
+    // or pushed value was actually applied. A pull can succeed (checked) while the
+    // user declines the resulting value (not accepted) — conflating the two would
+    // make the status claim "synced" when nothing actually changed.
+    const districtLabel = state.meta.district === 'playalinda' ? 'Playalinda' : 'Apollo';
+    const districtDate = m.masterLastUpdatedByDistrict && m.masterLastUpdatedByDistrict[state.meta.district];
+    const checkedText = m.lastChecked ? `Checked ${new Date(m.lastChecked).toLocaleTimeString()}` : 'Never checked';
+    const acceptedText = m.lastAccepted ? `baseline accepted ${new Date(m.lastAccepted).toLocaleTimeString()}` : 'baseline never refreshed';
+    const staleText = agolIsStale() ? ` — ${districtLabel} master data is ${districtDate ? 'from '+districtDate : 'of unknown age'} (stale)` : '';
+    el.textContent = `${checkedText} · ${acceptedText}${staleText}`;
   }
 
   // Compact status indicator (arrow direction = last read vs write, color = recent
   // vs stale) plus a separate, dismissible warning banner that only appears once
-  // the connection has genuinely gone stale (>12h since a successful sync) —
-  // dismissing it is remembered until the next stale period, not forever.
+  // the MASTER's own data has genuinely gone stale (>1 day old) — not merely
+  // because this device hasn't recently pinged the endpoint. Dismissing it is
+  // remembered until the next stale period, not forever.
   function updateAgolBannerUI(){
     updateAgolSettingsStatusText();
     const statusBar = document.getElementById('agolStatusBar');
@@ -1285,7 +1460,7 @@
     // URLs) — shows a plain "never synced" state rather than staying hidden until
     // the first explicit sync action.
     statusBar.style.display = 'flex';
-    if(m.lastSync){
+    if(m.lastChecked){
       arrow.textContent = m.lastActionType === 'write' ? '↑' : '↓';
       const color = stale || m.status==='error' ? 'var(--live-red)' : 'var(--excel-green)';
       arrow.style.color = color;
@@ -1296,10 +1471,12 @@
       dot.style.background = 'var(--live-red)';
     }
 
-    if((stale || m.status==='error') && !m.warningDismissed){
+    if((stale || m.status==='error') && m.warningDismissedDate !== todayStr()){
+      const districtLabel = state.meta.district === 'playalinda' ? 'Playalinda' : 'Apollo';
+      const districtDate = m.masterLastUpdatedByDistrict && m.masterLastUpdatedByDistrict[state.meta.district];
       warningText.textContent = m.status==='error'
         ? `⚠ Could not reach master species totals (${m.lastError||'error'}) — counts on this device may be out of date.`
-        : `⚠ Master species totals haven't synced in over 12 hours — counts on this device may be out of date.`;
+        : `⚠ ${districtLabel} master data is from ${districtDate || 'an unknown date'} — this device's baseline may be out of date.`;
       warningBanner.style.display = 'flex';
     } else {
       warningBanner.style.display = 'none';
@@ -1368,6 +1545,11 @@
     if(native && window.Capacitor.Plugins.StatusBar){
       window.Capacitor.Plugins.StatusBar.setOverlaysWebView({overlay:false}).catch(()=>{});
     }
+    // agolIsStale() now depends on which district is selected — refresh the sync
+    // indicator/warning here too, since this already runs at every site the
+    // district can change (Settings save, the mid-tally boundary auto-switch,
+    // reset, backup import).
+    updateAgolBannerUI();
   }
 
   // ---------- survey mode switching ----------
@@ -2163,7 +2345,7 @@
         return `<div style="padding-left:10px;">${districtLabel[dk]} (${d.gridCount} grid${d.gridCount===1?'':'s'})${speciesParts ? ': '+speciesParts : ' — no tallies'}</div>`;
       }).filter(Boolean).join('');
       return `<div style="padding:6px 0; border-bottom:1px solid var(--line);">
-        <div style="color:var(--ink); font-weight:600;">${s.date}${s.observer ? ' · '+s.observer : ''}</div>
+        <div style="color:var(--ink); font-weight:600;">${escapeHtml(s.date)}${s.observer ? ' · '+escapeHtml(s.observer) : ''}</div>
         ${districtLines || '<div style="padding-left:10px;">No grids tallied</div>'}
       </div>`;
     }).join('');
@@ -2725,7 +2907,7 @@
     });
     const summary = parts.length ? parts.join(' · ') : 'No activity recorded';
     return `<div class="grid-history-item">
-      <div class="gh-top"><span>Grid ${escapeHtml(String(g.gridNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
+      <div class="gh-top"><span>Grid ${escapeHtml(String(g.gridNumber))}</span><span class="mono item-subtext">${when}</span></div>
       <div class="gh-summary">${escapeHtml(summary)}</div>
       <button class="gh-edit" data-id="${g.id}">Edit grid #</button>
     </div>`;
@@ -3320,6 +3502,7 @@
   function getNestsDueForExcavation(){
     const now = Date.now();
     return state.nestInventory
+      .filter(e => (e.district||state.meta.district) === state.meta.district)
       .filter(e => !e.pinnedToLog)
       .filter(niHasKnownIncubation)
       .filter(e => !isNiExcavated(e))
@@ -3339,6 +3522,7 @@
   function getNestsWaiting(){
     const now = Date.now();
     return state.nestInventory
+      .filter(e => (e.district||state.meta.district) === state.meta.district)
       .filter(e => !e.pinnedToLog)
       .filter(niHasKnownIncubation)
       .filter(e => !isNiExcavated(e))
@@ -3436,12 +3620,12 @@
   // until moved back.
   function renderNestInventory(){
     const wrap = document.getElementById('nestInventoryList');
-    const list = state.nestInventory.filter(e => !e.completed && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e)));
+    const list = state.nestInventory.filter(e => !e.completed && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e)) && (e.district||state.meta.district) === state.meta.district);
     if(list.length===0){ wrap.innerHTML = '<div class="log-empty">No nest inventory entries yet.</div>'; return; }
     wrap.innerHTML = list.map(e=>{
       const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
       return `<div class="log-item">
-        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">Grid ${escapeHtml(String(e.grid))}</span></div>
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono item-subtext">Grid ${escapeHtml(String(e.grid))}</span></div>
         <div class="log-item-meta">Total clutch: ${total} · Damaged: ${e.damaged||0}${niGpsLine(e)}</div>
         ${e.comment ? `<div class="log-item-notes">${escapeHtml(e.comment)}</div>` : ''}
         <button class="log-item-edit" data-id="${e.id}">Edit</button>
@@ -3462,12 +3646,12 @@
   function renderCompletedNestInventory(){
     const wrap = document.getElementById('completedNestList');
     if(!wrap) return;
-    const list = state.nestInventory.filter(e => e.completed);
+    const list = state.nestInventory.filter(e => e.completed && (e.district||state.meta.district) === state.meta.district);
     if(list.length===0){ wrap.innerHTML = '<div class="log-empty">No completed entries yet.</div>'; return; }
     wrap.innerHTML = list.map(e=>{
       const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
       return `<div class="log-item">
-        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">Grid ${escapeHtml(String(e.grid))}</span></div>
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel||'')} — Nest #${escapeHtml(String(e.nestNumber))}</span><span class="mono item-subtext">Grid ${escapeHtml(String(e.grid))}</span></div>
         <div class="log-item-meta">Total clutch: ${total} · Damaged: ${e.damaged||0}${niGpsLine(e)}</div>
         ${e.comment ? `<div class="log-item-notes">${escapeHtml(e.comment)}</div>` : ''}
         <button class="log-item-edit" data-id="${e.id}">Edit</button>
@@ -3666,14 +3850,23 @@
   }
 
   function buildNestInventoryWorkbook(){
-    if(state.nestInventory.length===0){ showToast('No nest inventory entries to export'); return null; }
+    // Only "Today's" entries — excavated, pinned, or unknown-incubation, and not
+    // yet moved to Completed — scoped to the currently-selected district. Was
+    // previously exporting the entire array, including "Not Yet Due"/"Due for
+    // Excavation" entries that have no real data yet, producing mostly-empty rows.
+    const todaysEntries = state.nestInventory.filter(e =>
+      !e.completed
+      && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e))
+      && (e.district || state.meta.district) === state.meta.district
+    );
+    if(todaysEntries.length===0){ showToast('No nest inventory entries to export'); return null; }
     const wb = XLSX.utils.book_new();
     const observer = state.meta.observer || '';
     // Column order mirrors the paper Nest Inventory form. "Laid" and "Hatched" (under
     // Date on the paper form) are repurposed here per Quinn's convention: Laid = Total
     // Clutch, Hatched = Hatchling Dead + Hatchling Live + Empty Shells.
     const header = ['Date','Observer','District','Grid','Species','Nest #','Laid','Hatched','Hatchling Live','Hatchling Dead','Empty Shells','Pipped Dead','Pipped Live','Whole Eggs','Number Physically Damaged','Total Clutch','LAT','LON','Comment'];
-    const rows = state.nestInventory.slice().reverse().map(e=>{
+    const rows = todaysEntries.slice().reverse().map(e=>{
       const total = (e.hatchLive||0)+(e.hatchDead||0)+(e.emptyShells||0)+(e.pippedDead||0)+(e.pippedLive||0)+(e.wholeEggs||0)+(e.damaged||0);
       const hatched = (e.hatchDead||0)+(e.hatchLive||0)+(e.emptyShells||0);
       const districtLabel = DISTRICT_LABEL[e.district||state.meta.district] || 'Apollo';
@@ -3713,15 +3906,23 @@
   }
 
   async function clearNestInventory(){
-    if(!confirm("Clear today's Nest Inventory entries? This cannot be undone.")) return;
-    state.nestInventory = state.nestInventory.filter(e => e.completed); // Completed entries persist until "Clear Season" specifically
+    const districtLabel = DISTRICT_LABEL[state.meta.district] || 'Apollo';
+    if(!confirm(`Clear today's ${districtLabel} Nest Inventory entries?\n\nEverything currently in Today's moves to Completed Nest Inventory — even entries with no data filled in yet. Nothing is deleted; move any of them back from Completed if needed.`)) return;
+    // Moves EVERY entry currently in "Today's" (this district only) to Completed —
+    // even ones with no excavation data at all — per Quinn's explicit instruction
+    // that Clear Day should never discard anything, only ever move it.
+    let movedCount = 0;
+    state.nestInventory.forEach(e=>{
+      const isToday = !e.completed && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e)) && (e.district||state.meta.district) === state.meta.district;
+      if(isToday){ e.completed = true; movedCount++; }
+    });
     const ok = await saveState();
     renderNestInventory();
     renderDueForExcavation();
     renderNestsWaiting();
     renderCompletedNestInventory();
     if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
-    showToast('Nest Inventory cleared');
+    showToast(movedCount>0 ? `${movedCount} entr${movedCount===1?'y':'ies'} moved to Completed` : 'Nothing to clear');
   }
 
   // ---------- tiger beetle survey ----------
@@ -3826,7 +4027,7 @@
     wrap.innerHTML = state.tigerBeetle.map(e=>{
       const when = new Date(e.startTs).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
       return `<div class="log-item">
-        <div class="log-item-top"><span>Grid ${escapeHtml(String(e.grid))} ${escapeHtml(e.direction)}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
+        <div class="log-item-top"><span>Grid ${escapeHtml(String(e.grid))} ${escapeHtml(e.direction)}</span><span class="mono item-subtext">${when}</span></div>
         <div class="log-item-meta">${e.individuals} individual(s) · ${e.copulatingPairs} pair(s)</div>
         ${e.notes ? `<div class="log-item-notes">${escapeHtml(e.notes)}</div>` : ''}
         <button class="log-item-edit" data-id="${e.id}">Add Comment</button>
@@ -4037,7 +4238,7 @@
       const distStr = e.disturbanceCode ? (e.disturbanceCode==='O' ? `O – ${e.disturbanceOther||'other'}` : e.disturbanceCode) : '—';
       const dist2Str = e.disturbanceCode2 ? (e.disturbanceCode2==='O' ? ` + O – ${e.disturbanceOther2||'other'}` : ` + ${e.disturbanceCode2}`) : '';
       return `<div class="log-item">
-        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel)} — nest #${escapeHtml(String(e.nestNumber||'—'))}</span><span class="mono" style="font-weight:400;color:var(--ink-muted);font-size:11px;">${when}</span></div>
+        <div class="log-item-top"><span>${escapeHtml(e.speciesLabel)} — nest #${escapeHtml(String(e.nestNumber||'—'))}</span><span class="mono item-subtext">${when}</span></div>
         <div class="log-item-meta">Sighting: ${e.sightingCode}${gridStr} · Disturbance: ${distStr}${dist2Str}</div>
         ${e.notes ? `<div class="log-item-notes">${escapeHtml(e.notes)}</div>` : ''}
         <button class="log-item-edit" data-id="${e.id}">Edit</button>
@@ -4161,6 +4362,10 @@
     renderMetaLine();
     renderAddGridButton();
     renderGridHistory();
+    renderNestInventory();
+    renderDueForExcavation();
+    renderNestsWaiting();
+    renderCompletedNestInventory();
     applyMode();
     if(!ok){ showToast('Save FAILED — settings NOT saved, try again'); return; }
     closeSettings();
@@ -4288,6 +4493,7 @@
     state.meta.date = todayStr();
     state.meta.runTime = guessRunTime();
     state.meta.dailyComment = '';
+    state.meta.fullBeachRun = false; // a new day shouldn't inherit yesterday's full-beach-run state — re-enable explicitly if today is one too
     const ok = await saveState();
     renderGridHistory();
     renderLog();
@@ -4734,7 +4940,7 @@
   document.getElementById('agolSettingsWriteBtn').addEventListener('click', async ()=>{ await agolPush(); });
   document.getElementById('agolStatusBar').addEventListener('click', async ()=>{ await agolPull(); });
   document.getElementById('agolWarningDismiss').addEventListener('click', ()=>{
-    state.meta.agolSync.warningDismissed = true;
+    state.meta.agolSync.warningDismissedDate = todayStr();
     saveState();
     updateAgolBannerUI();
   });
@@ -4742,6 +4948,16 @@
 
   // ---------- init ----------
   (async function init(){
+    // Populate the species/disturbance dropdowns from their single source of
+    // truth (SPECIES / DISTURBANCE_CODES) — was previously duplicated as static
+    // <option> lists across multiple modals.
+    populateSpeciesSelect('manualCaptureSpecies');
+    populateSpeciesSelect('subSpecies', {includeUnknown:true});
+    populateSpeciesSelect('niSpecies');
+    populateDisturbanceSelect('captureDisturbance', 'None');
+    populateDisturbanceSelect('subDisturbanceCode', 'Select…');
+    populateDisturbanceSelect('subDisturbanceCode2', 'None');
+
     const storageAvailable = isLocalStorageAvailable();
     if(!storageAvailable){
       document.getElementById('storageWarningBanner').classList.add('show');
