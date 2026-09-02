@@ -127,8 +127,13 @@
   .fab{ position:fixed; left:14px; right:14px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index:40; background:var(--gold); color:#2A1D05; border:none; border-radius:14px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
   /* "Sinking" pressed-in state for sync buttons while a sync is in progress —
      visual feedback plus pointer-events:none so rapid repeat taps don't fire
-     overlapping requests. */
-  .sync-busy{ transform: scale(0.94); opacity: 0.6; filter: saturate(0.6); pointer-events: none; cursor: default; transition: transform .15s ease, opacity .15s ease; }
+     overlapping requests. Deliberately instant (no transition) rather than
+     animated — a short CSS transition can be unreliable on some mobile WebViews
+     if the sync resolves before it finishes, making the effect easy to miss;
+     an immediate, pronounced state change is more dependable. Paired with a text
+     change (not just this visual) so the cue doesn't rely on scale/opacity alone
+     being noticeable on a small screen. */
+  .sync-busy{ transform: scale(0.90); opacity: 0.55; filter: saturate(0.5) brightness(0.85); pointer-events: none; cursor: default; box-shadow: inset 0 2px 5px rgba(0,0,0,0.35); }
 
   .overlay{ position:fixed; inset:0; background:rgba(6,16,17,0.72); display:flex; align-items:flex-end; z-index:50; opacity:0; pointer-events:none; transition:opacity .2s ease; }
   .overlay.show{ opacity:1; pointer-events:auto; }
@@ -251,7 +256,7 @@
       Canaveral National Seashore
       <span id="agolStatusBar" style="display:none; align-items:center; gap:5px; cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:1px 8px; height:20px;" role="button" aria-label="Sync master species totals">
         <span id="agolStatusDot" style="width:6px; height:6px; border-radius:50%; display:inline-block; background:var(--live-red); flex-shrink:0;"></span>
-        <span style="font-size:10px; color:var(--ink); font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;">sync</span>
+        <span id="agolStatusLabel" style="font-size:10px; color:var(--ink); font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;">sync</span>
         <span id="agolStatusArrow" style="font-weight:700; font-size:12px; color:var(--ink-muted);">–</span>
       </span>
     </span>
@@ -657,8 +662,10 @@
       <h3 id="countsHeading">Current counts</h3>
       <div class="settings-row"><span style="color:var(--grn); font-weight:600; font-size:15px;">Green</span><input type="number" id="editGrn"></div>
       <div class="settings-row"><span style="color:var(--grn); font-size:15px;">Green next index #</span><input type="number" id="editGrnNextIdx"></div>
+      <div class="settings-row"><span style="color:var(--grn); font-size:15px;">Green index interval</span><input type="number" id="editGrnInterval"></div>
       <div class="settings-row"><span style="color:var(--log); font-weight:600; font-size:15px;">Loggerhead</span><input type="number" id="editLog"></div>
       <div class="settings-row"><span style="color:var(--log); font-size:15px;">Loggerhead next index #</span><input type="number" id="editLogNextIdx"></div>
+      <div class="settings-row"><span style="color:var(--log); font-size:15px;">Loggerhead index interval</span><input type="number" id="editLogInterval"></div>
       <div class="settings-row"><span style="color:var(--lth); font-weight:600; font-size:15px;">Leatherback</span><input type="number" id="editLth"></div>
       <div class="settings-row"><span style="color:var(--kmp); font-weight:600; font-size:15px;">Kemp's Ridley</span><input type="number" id="editKmp"></div>
       <div id="fixStartSection" style="display:none; margin-top:14px;">
@@ -706,6 +713,8 @@
         </div>
         <div class="field"><label>Read flow URL</label><input type="url" id="editAgolUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
         <div class="field"><label>Write flow URL</label><input type="url" id="editAgolWriteUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
+        <div class="field"><label>Warn as stale after (days)</label><input type="number" id="editStaleThresholdDays" min="1" step="1"></div>
+        <div class="field"><label>Warn on write if count jumps by more than</label><input type="number" id="editWildDiffThreshold" min="1" step="1"></div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
           <button type="button" class="copy-btn" id="agolSettingsSyncBtn">↓ Down (read)</button>
           <button type="button" class="copy-btn" id="agolSettingsWriteBtn">↑ Up (write)</button>
@@ -714,7 +723,7 @@
       </div>
       <div class="settings-group section-spaced">
         <h3>Recent surveys</h3>
-        <div class="hint-text">A compact record of past survey days, kept on this device for 30 days after each "Start New Day." Species totals only — not full grid-by-grid detail.</div>
+        <div class="hint-text">Past survey days, kept on this device for 30 days after each "Start New Day." Tap a date to download that day's full export again.</div>
         <div id="surveyHistoryList" style="font-size:12.5px; color:var(--ink-muted);">No recent surveys yet.</div>
       </div>
       <div class="settings-group section-spaced">
@@ -873,7 +882,7 @@
         agolSync: {
           featureLayerUrl:'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/b0a989902de94e2e80198d0364db6d5d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ah7nWDQBm2IgPE1h8nJthUkrG670cw1kiUQo3ZD_jv4',
           writeUrl:'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/f0d0d0c854e1416dae523eda20ac1b09/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=--TIymtR-XTQbU3ZoPAhaYCLMTD-18thzoqFIoq0390',
-          enabled:true, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null
+          enabled:true, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null, staleThresholdDays:1, wildDiffThreshold:150
         } },
       species:{
         apollo: defaultSpeciesSet(),
@@ -920,7 +929,7 @@
     const DEFAULT_AGOL_READ_URL = 'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/b0a989902de94e2e80198d0364db6d5d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ah7nWDQBm2IgPE1h8nJthUkrG670cw1kiUQo3ZD_jv4';
     const DEFAULT_AGOL_WRITE_URL = 'https://default0693b5ba4b184d7b9341f32f400a549.4.environment.api.gov.powerplatform.microsoft.us:443/powerautomate/automations/direct/workflows/f0d0d0c854e1416dae523eda20ac1b09/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=--TIymtR-XTQbU3ZoPAhaYCLMTD-18thzoqFIoq0390';
     if(!meta.agolSync || typeof meta.agolSync !== 'object'){
-      meta.agolSync = { featureLayerUrl: DEFAULT_AGOL_READ_URL, writeUrl: DEFAULT_AGOL_WRITE_URL, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null };
+      meta.agolSync = { featureLayerUrl: DEFAULT_AGOL_READ_URL, writeUrl: DEFAULT_AGOL_WRITE_URL, lastChecked:null, lastAccepted:null, masterLastUpdatedByDistrict:{apollo:null, playalinda:null}, lastActionType:null, lastActionDate:null, status:'not-configured', lastError:null, warningDismissedDate:null, staleThresholdDays:1, wildDiffThreshold:150 };
     }
     // Backfill the baked-in defaults for an existing install that saved empty URLs
     // before this update — but never overwrite a URL someone already set manually.
@@ -960,6 +969,8 @@
       };
     }
     delete meta.agolSync.masterLastUpdated;
+    if(meta.agolSync.staleThresholdDays === undefined) meta.agolSync.staleThresholdDays = 1;
+    if(meta.agolSync.wildDiffThreshold === undefined) meta.agolSync.wildDiffThreshold = 150;
     // One-time forced switch to light mode for existing installs (better sunlight
     // readability) — only fires once, tracked by this flag, so the toggle in
     // Settings still works normally afterward and won't keep getting overridden.
@@ -1115,14 +1126,32 @@
   // Puts every sync button into a visibly "sunk"/pressed, non-interactive state
   // while a sync is running, and back to normal once it's done — so a user
   // tapping it repeatedly can't fire overlapping requests, with clear feedback
-  // that something is already happening.
+  // that something is already happening. Swaps in text too, not just the visual
+  // scale/opacity change, since that alone can be easy to miss on a small screen.
   function setSyncButtonsBusy(busy){
-    ['agolSettingsSyncBtn','agolSettingsWriteBtn','agolWarningSyncBtn','agolStatusBar'].forEach(id=>{
+    ['agolSettingsSyncBtn','agolSettingsWriteBtn','agolWarningSyncBtn'].forEach(id=>{
       const el = document.getElementById(id);
       if(!el) return;
       el.classList.toggle('sync-busy', busy);
       if('disabled' in el) el.disabled = busy;
+      if(busy){
+        if(el.dataset.origText === undefined) el.dataset.origText = el.textContent;
+        el.textContent = '… syncing';
+      } else if(el.dataset.origText !== undefined){
+        el.textContent = el.dataset.origText;
+      }
     });
+    const statusBar = document.getElementById('agolStatusBar');
+    if(statusBar) statusBar.classList.toggle('sync-busy', busy);
+    const label = document.getElementById('agolStatusLabel');
+    if(label){
+      if(busy){
+        if(label.dataset.origText === undefined) label.dataset.origText = label.textContent;
+        label.textContent = '…';
+      } else if(label.dataset.origText !== undefined){
+        label.textContent = label.dataset.origText;
+      }
+    }
   }
 
   async function agolPull(){
@@ -1253,10 +1282,6 @@
   // freely. First checks the master's current dates — if our survey date is
   // earlier than what's already there, this write would be backdating the master,
   // which is worth confirming rather than doing silently.
-  // Flag if this device's count differs from the master's by more than this many
-  // nests — real single-day progress shouldn't hit this, so it's a reasonable
-  // "something looks off" trip wire. Worth adjusting if it fires too often/rarely.
-  const AGOL_WILD_DIFFERENCE_THRESHOLD = 150;
 
   // Which district(s) were actually part of today's survey — writes should only
   // touch these, not blindly send both districts' rows every time (which could
@@ -1327,7 +1352,7 @@
           const diff = sp.count - masterCount;
           if(diff < 0){
             lowerLines.push(`${districtLabel[districtKey]} ${speciesLabel[speciesKey]}: your count (${sp.count}) → master's (${masterCount})`);
-          } else if(diff > AGOL_WILD_DIFFERENCE_THRESHOLD){
+          } else if(diff > (state.meta.agolSync.wildDiffThreshold || 150)){
             wildLines.push(`${districtLabel[districtKey]} ${speciesLabel[speciesKey]}: your count (${sp.count}) vs master's (${masterCount}) — a jump of ${diff}`);
           }
         }
@@ -1410,7 +1435,7 @@
     const todayParts = todayStr().split('-');
     const todayTime = new Date(parseInt(todayParts[0],10), parseInt(todayParts[1],10)-1, parseInt(todayParts[2],10)).getTime();
     const ageDays = Math.round((todayTime - masterTime) / (24*60*60*1000));
-    return ageDays > 1;
+    return ageDays > (m.staleThresholdDays || 1);
   }
 
   function updateAgolSettingsStatusText(){
@@ -2332,23 +2357,48 @@
       container.innerHTML = 'No recent surveys yet.';
       return;
     }
-    const speciesLabel = {loggerhead:'Loggerhead', green:'Green', leatherback:'Leatherback', kemps:"Kemp's Ridley"};
-    const districtLabel = {apollo:'Apollo', playalinda:'Playalinda'};
-    container.innerHTML = sorted.map(s=>{
-      const districtLines = ['apollo','playalinda'].map(dk=>{
-        const d = s.districts && s.districts[dk];
-        if(!d || d.gridCount===0) return '';
-        const speciesParts = ['loggerhead','green','leatherback','kemps']
-          .filter(sk => d.tallies[sk] > 0)
-          .map(sk => `${speciesLabel[sk]} +${d.tallies[sk]}`)
-          .join(', ');
-        return `<div style="padding-left:10px;">${districtLabel[dk]} (${d.gridCount} grid${d.gridCount===1?'':'s'})${speciesParts ? ': '+speciesParts : ' — no tallies'}</div>`;
-      }).filter(Boolean).join('');
-      return `<div style="padding:6px 0; border-bottom:1px solid var(--line);">
-        <div style="color:var(--ink); font-weight:600;">${escapeHtml(s.date)}${s.observer ? ' · '+escapeHtml(s.observer) : ''}</div>
-        ${districtLines || '<div style="padding-left:10px;">No grids tallied</div>'}
-      </div>`;
-    }).join('');
+    // Just dates, each a tappable row that downloads that day's full export —
+    // not a text summary. Species-total lines were dropped since the full
+    // workbook (now reconstructable from the stored raw data) is more useful
+    // than a compact preview of it.
+    container.innerHTML = sorted.map(s => `
+      <button type="button" class="copy-btn survey-history-download" data-id="${s.id}" style="width:100%; text-align:left; display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+        <span>${escapeHtml(s.date)}${s.observer ? ' · '+escapeHtml(s.observer) : ''}</span>
+        <span style="color:var(--ink-muted); font-size:11px;">⬇ download</span>
+      </button>
+    `).join('');
+    container.querySelectorAll('.survey-history-download').forEach(btn=>{
+      btn.addEventListener('click', ()=> exportHistoricalSurvey(btn.dataset.id));
+    });
+  }
+
+  // Which district a historical snapshot's filename should be labeled with —
+  // just for the filename itself; each row inside the workbook still carries its
+  // own correct district regardless. Falls back to Apollo if genuinely ambiguous
+  // (a full beach run covering both).
+  function historicalSnapshotDistrict(snapshot){
+    const apolloCount = snapshot.districts && snapshot.districts.apollo ? snapshot.districts.apollo.gridCount : 0;
+    const playalindaCount = snapshot.districts && snapshot.districts.playalinda ? snapshot.districts.playalinda.gridCount : 0;
+    if(playalindaCount > 0 && apolloCount === 0) return 'playalinda';
+    return 'apollo';
+  }
+
+  async function exportHistoricalSurvey(snapshotId){
+    if(typeof XLSX === 'undefined'){ showToast('Excel library not loaded — check connection and try again'); return; }
+    const snapshot = state.surveyHistory.find(s => s.id === snapshotId);
+    if(!snapshot){ showToast('Survey record not found'); return; }
+    const built = buildTurtleWorkbook({
+      grids: snapshot.grids || [],
+      indexLog: snapshot.indexLog || [],
+      subsequentSightings: snapshot.subsequentSightings || [],
+      speciesSnapshot: snapshot.speciesSnapshot,
+      date: snapshot.date,
+      observer: snapshot.observer,
+      runTime: snapshot.runTime,
+      district: historicalSnapshotDistrict(snapshot)
+    });
+    try{ await saveWorkbook(built.wb, built.filename); }
+    catch(e){ showToast('Export failed — try again'); }
   }
 
   function renderDailyTotals(){
@@ -3889,12 +3939,14 @@
     if(!built) return;
     try{
       await saveWorkbook(built.wb, built.filename);
-      // Move every excavated, not-yet-completed entry into Completed Nest Inventory —
-      // only after a genuinely successful export, so nothing moves out of Today's
-      // if the export itself failed.
+      // Move EVERY entry currently in "Today's" (this district only) into
+      // Completed Nest Inventory — even ones with no data filled in yet, same
+      // rule Clear Day uses — only after a genuinely successful export, so
+      // nothing moves out of Today's if the export itself failed.
       let movedCount = 0;
       state.nestInventory.forEach(e=>{
-        if(isNiExcavated(e) && !e.completed){ e.completed = true; movedCount++; }
+        const isToday = !e.completed && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e)) && (e.district||state.meta.district) === state.meta.district;
+        if(isToday){ e.completed = true; movedCount++; }
       });
       if(movedCount>0){
         await saveState();
@@ -3906,11 +3958,11 @@
   }
 
   async function clearNestInventory(){
+    // No confirm here — Clear Day only ever moves entries into Completed Nest
+    // Inventory (even empty ones), never deletes, and every move is reversible
+    // via "Move to Today's" on the Completed entry — so there's nothing to warn
+    // about that a confirm dialog would actually be protecting against.
     const districtLabel = DISTRICT_LABEL[state.meta.district] || 'Apollo';
-    if(!confirm(`Clear today's ${districtLabel} Nest Inventory entries?\n\nEverything currently in Today's moves to Completed Nest Inventory — even entries with no data filled in yet. Nothing is deleted; move any of them back from Completed if needed.`)) return;
-    // Moves EVERY entry currently in "Today's" (this district only) to Completed —
-    // even ones with no excavation data at all — per Quinn's explicit instruction
-    // that Clear Day should never discard anything, only ever move it.
     let movedCount = 0;
     state.nestInventory.forEach(e=>{
       const isToday = !e.completed && (e.pinnedToLog || isNiExcavated(e) || !niHasKnownIncubation(e)) && (e.district||state.meta.district) === state.meta.district;
@@ -3922,7 +3974,7 @@
     renderNestsWaiting();
     renderCompletedNestInventory();
     if(!ok){ showToast('Save FAILED after clearing — check storage'); return; }
-    showToast(movedCount>0 ? `${movedCount} entr${movedCount===1?'y':'ies'} moved to Completed` : 'Nothing to clear');
+    showToast(movedCount>0 ? `${movedCount} ${districtLabel} entr${movedCount===1?'y':'ies'} moved to Completed` : 'Nothing to clear');
   }
 
   // ---------- tiger beetle survey ----------
@@ -4270,8 +4322,10 @@
     document.getElementById('countsHeading').textContent = `Current counts (${districtKey==='playalinda'?'Playalinda':'Apollo'})`;
     document.getElementById('editLog').value = sp.loggerhead.count;
     document.getElementById('editLogNextIdx').value = sp.loggerhead.nextIndex;
+    document.getElementById('editLogInterval').value = sp.loggerhead.interval;
     document.getElementById('editGrn').value = sp.green.count;
     document.getElementById('editGrnNextIdx').value = sp.green.nextIndex;
+    document.getElementById('editGrnInterval').value = sp.green.interval;
     document.getElementById('editLth').value = sp.leatherback.count;
     document.getElementById('editKmp').value = sp.kemps.count;
     document.getElementById('fixStartSection').style.display = hasTodaysTallies(districtKey) ? 'block' : 'none';
@@ -4297,6 +4351,8 @@
     document.getElementById('editAgolEnabled').value = state.meta.agolSync.enabled ? 'on' : 'off';
     document.getElementById('editAgolUrl').value = state.meta.agolSync.featureLayerUrl || '';
     document.getElementById('editAgolWriteUrl').value = state.meta.agolSync.writeUrl || '';
+    document.getElementById('editStaleThresholdDays').value = state.meta.agolSync.staleThresholdDays || 1;
+    document.getElementById('editWildDiffThreshold').value = state.meta.agolSync.wildDiffThreshold || 150;
     updateAgolSettingsStatusText();
     populateGridPointSelect();
     populateCountFields(state.meta.district || 'apollo');
@@ -4348,12 +4404,17 @@
     if(agolUrlChanged){
       state.meta.agolSync.status = newAgolUrl ? 'syncing' : 'not-configured';
     }
+    state.meta.agolSync.staleThresholdDays = Math.max(1, parseInt(document.getElementById('editStaleThresholdDays').value,10) || 1);
+    state.meta.agolSync.wildDiffThreshold = Math.max(1, parseInt(document.getElementById('editWildDiffThreshold').value,10) || 150);
     const v = id => Math.max(0, parseInt(document.getElementById(id).value,10) || 0);
+    const vi = id => Math.max(1, parseInt(document.getElementById(id).value,10) || 30); // interval: never 0 (would break the index-threshold math), falls back to the default of 30 if unparseable
     const sp = state.species[selectedDistrict];
     sp.loggerhead.count = v('editLog');
     sp.loggerhead.nextIndex = v('editLogNextIdx');
+    sp.loggerhead.interval = vi('editLogInterval');
     sp.green.count = v('editGrn');
     sp.green.nextIndex = v('editGrnNextIdx');
+    sp.green.interval = vi('editGrnInterval');
     sp.leatherback.count = v('editLth');
     sp.kemps.count = v('editKmp');
     const ok = await saveState();
@@ -4469,7 +4530,14 @@
       savedAt: new Date().toISOString(),
       observer: state.meta.observer || '',
       runTime: state.meta.runTime || '',
-      districts
+      districts,
+      // Full raw data, deep-copied since these arrays get cleared right after this
+      // runs — captured so a Recent Surveys entry can re-download the complete
+      // export later, not just the compact species-total summary above.
+      grids: JSON.parse(JSON.stringify(state.grids)),
+      indexLog: JSON.parse(JSON.stringify(state.indexLog)),
+      subsequentSightings: JSON.parse(JSON.stringify(state.subsequentSightings)),
+      speciesSnapshot: JSON.parse(JSON.stringify(state.species))
     };
   }
 
@@ -4566,18 +4634,21 @@
     return isNaN(d.getTime()) ? new Date() : d;
   }
 
-  function buildTurtleWorkbook(){
+  // Optional overrides let this same builder reconstruct a historical day's
+  // export from a Recent Surveys snapshot, instead of always reading the
+  // current live state — everything defaults to current state if not given.
+  function buildTurtleWorkbook(override={}){
     const wb = XLSX.utils.book_new();
 
-    const districtKey = state.meta.district;
+    const districtKey = override.district || state.meta.district;
     const districtLabel = DISTRICT_LABEL[districtKey] || 'Apollo';
-    const observer = state.meta.observer || '';
-    const runTime = state.meta.runTime || 'Day';
+    const observer = override.observer !== undefined ? override.observer : (state.meta.observer || '');
+    const runTime = override.runTime || state.meta.runTime || 'Day';
     const labelToId = {};
     SPECIES.forEach(m=>{ labelToId[m.label] = m.id; });
 
     // ---- index lookup: numbered entries by species+number; unnumbered ("other") queued by species+grid ----
-    const chronoIndexLog = state.indexLog.slice().reverse();
+    const chronoIndexLog = (override.indexLog || state.indexLog).slice().reverse();
     const indexByKey = {};
     const indexOtherQueues = {};
     chronoIndexLog.forEach(e=>{
@@ -4592,7 +4663,7 @@
 
     // ---- subsequent-sighting lookup: catches predated-on-discovery nests that got a real code
     // logged via the auto-triggered "New Predated Nest" form, so export doesn't ignore that data ----
-    const chronoSub = state.subsequentSightings.slice().reverse();
+    const chronoSub = (override.subsequentSightings || state.subsequentSightings).slice().reverse();
     const subByKey = {};
     chronoSub.forEach(e=>{
       if(e.nestNumber) subByKey[e.speciesLabel+'::'+e.nestNumber] = e;
@@ -4636,7 +4707,7 @@
     }
 
     // ---- New Sightings: expand every grid tally into individual rows, oldest first ----
-    const chronoGrids = state.grids.slice().reverse();
+    const chronoGrids = (override.grids || state.grids).slice().reverse();
     chronoGrids.forEach(g=>{
       const gDistrict = g.district || state.meta.district;
       FIXED_TALLY_SPECIES.forEach(meta=>{
@@ -4710,9 +4781,9 @@
     // ---- Subsequent Sightings: matches their sheet exactly ----
     const subHeader = ['Season','RunTime','Date','Observer','Beach','Species','Nest Number','GridNumber','Sighting Code','Disturbance','Screened','WhiteStake','Relocated','Comment'];
     const subRows = [];
-    state.subsequentSightings.slice().reverse().forEach(e=>{
+    (override.subsequentSightings || state.subsequentSightings).slice().reverse().forEach(e=>{
       const speciesId = labelToId[e.speciesLabel] || null;
-      const eDistrict = e.district || state.meta.district;
+      const eDistrict = e.district || districtKey;
       const nestStr = /^[A-Za-z]{1,2}[A-Z]{2}\d+$/.test(e.nestNumber||'') ? e.nestNumber : (buildNestNumberString(eDistrict, speciesId, e.nestNumber) || padIfNumeric(e.nestNumber));
       const dist = combinedDistCode(e.disturbanceCode, e.disturbanceCode2);
       const comment = appendComment(e.notes, distDetailComment(e.disturbanceCode, e.disturbanceOther, e.disturbanceCode2, e.disturbanceOther2));
@@ -4729,28 +4800,28 @@
     const infoRows = [
       ['Field','Value'],
       ['Observer', observer],
-      ['Date', state.meta.date||''],
+      ['Date', override.date || state.meta.date || ''],
       ['Current district (this session)', districtLabel],
       ['Exported', new Date().toLocaleString()],
       ['Notes for today', state.meta.dailyComment || ''],
       ['— Apollo —', ''],
-      ['Loggerhead running total', state.species.apollo.loggerhead.count],
-      ['Loggerhead next index #', state.species.apollo.loggerhead.nextIndex],
-      ['Green running total', state.species.apollo.green.count],
-      ['Green next index #', state.species.apollo.green.nextIndex],
-      ['Leatherback running total', state.species.apollo.leatherback.count],
-      ["Kemp's Ridley running total", state.species.apollo.kemps.count],
+      ['Loggerhead running total', (override.speciesSnapshot || state.species).apollo.loggerhead.count],
+      ['Loggerhead next index #', (override.speciesSnapshot || state.species).apollo.loggerhead.nextIndex],
+      ['Green running total', (override.speciesSnapshot || state.species).apollo.green.count],
+      ['Green next index #', (override.speciesSnapshot || state.species).apollo.green.nextIndex],
+      ['Leatherback running total', (override.speciesSnapshot || state.species).apollo.leatherback.count],
+      ["Kemp's Ridley running total", (override.speciesSnapshot || state.species).apollo.kemps.count],
       ['— Playalinda —', ''],
-      ['Loggerhead running total', state.species.playalinda.loggerhead.count],
-      ['Loggerhead next index #', state.species.playalinda.loggerhead.nextIndex],
-      ['Green running total', state.species.playalinda.green.count],
-      ['Green next index #', state.species.playalinda.green.nextIndex],
-      ['Leatherback running total', state.species.playalinda.leatherback.count],
-      ["Kemp's Ridley running total", state.species.playalinda.kemps.count],
+      ['Loggerhead running total', (override.speciesSnapshot || state.species).playalinda.loggerhead.count],
+      ['Loggerhead next index #', (override.speciesSnapshot || state.species).playalinda.loggerhead.nextIndex],
+      ['Green running total', (override.speciesSnapshot || state.species).playalinda.green.count],
+      ['Green next index #', (override.speciesSnapshot || state.species).playalinda.green.nextIndex],
+      ['Leatherback running total', (override.speciesSnapshot || state.species).playalinda.leatherback.count],
+      ["Kemp's Ridley running total", (override.speciesSnapshot || state.species).playalinda.kemps.count],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows), 'Survey Info');
 
-    const datePart = formatFilenameDate(state.meta.date || todayStr());
+    const datePart = formatFilenameDate(override.date || state.meta.date || todayStr());
     const filename = `${districtLabel}Survey${datePart}.xlsx`;
     return {wb, filename};
   }
