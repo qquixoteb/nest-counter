@@ -1,7 +1,7 @@
 // Bump this version string every time index.html/manifest.json change and get
 // redeployed — that's what forces old cached copies to be replaced. Forgetting
 // this is the classic "PWA won't update" trap.
-const CACHE_NAME = 'nest-counter-v1';
+const CACHE_NAME = 'nest-counter-v2';
 const CORE_ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -24,7 +24,18 @@ self.addEventListener('activate', (event) => {
 // cached (matters most for field use — no waiting on a weak signal), while
 // quietly fetching a fresh copy in the background for next time. If there's
 // no cached copy yet (first-ever load), falls through to the network.
+//
+// Only applies to this app's own same-origin files. Cross-origin requests (the
+// Power Automate sync calls) must always hit the network directly and are never
+// touched by this — caching those caused a real bug: a stale response from a
+// previous sync got served as if it were current, silently correcting itself
+// only on a second attempt once the background revalidation caught up. Sync
+// correctness depends on every request being genuinely live.
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) {
+    return; // not this service worker's concern — let it go straight to the network
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const networkFetch = fetch(event.request)
