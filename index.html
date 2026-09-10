@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Field Book</title>
+<title>Field Notes</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0D2426">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Zilla+Slab:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -55,18 +55,61 @@
   /* App name sits in the eyebrow beside the park name; the <h1> below is the
      currently selected survey, which is the thing that actually changes. */
   .app-name{ color: var(--ink); font-weight: 700; letter-spacing: 0.02em; }
+  .app-name{ font-family: 'Zilla Slab', Georgia, serif; font-weight: 700; letter-spacing: 0.01em; text-transform: none; font-size: 1.18em; }
+  .app-name .wm-light{ font-weight: 400; font-style: italic; letter-spacing: 0; opacity: 0.85; }
   .eyebrow-sep{ color: var(--ink-muted); opacity: 0.6; }
   .nps-logo{ width:34px; height:auto; flex-shrink:0; margin-top:2px; cursor:pointer; }
   .title-block{ flex:1; min-width:0; }
-  .title-block h1{ font-size: 22px; font-weight:700; margin:0 0 2px; letter-spacing:0.2px; }
-  .title-block .eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; color: var(--ink-muted); margin-bottom:6px; display:block; line-height:1.4; }
+  /* Both header lines must stay on ONE line each at any width — they shrink
+     rather than wrap. clamp() scales them down on narrow screens; nowrap plus
+     min-width:0 on .title-block stops the flex row from pushing the survey name
+     down under the logo. */
+  .title-block h1{
+    font-size: clamp(13.5px, 4.6vw, 22px); font-weight:700; margin:0 0 2px; letter-spacing:0.2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .title-block .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size: clamp(7.5px, 2.5vw, 9.5px);
+    letter-spacing:0.5px; text-transform:uppercase; color: var(--ink-muted);
+    margin-bottom:6px; line-height:1.4;
+    display:flex; align-items:center; gap:5px;
+    white-space: nowrap; overflow: hidden;
+  }
+  .title-block .eyebrow > *{ flex-shrink: 0; }
   .subline{ font-size:12px; color:var(--ink-muted); margin:2px 0 16px; font-family:'IBM Plex Mono',monospace; }
   .icon-btn{ background: var(--surface); border:1px solid var(--line); color: var(--ink); width:40px; height:40px; border-radius:10px; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .icon-btn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{ outline: 2px solid var(--gold); outline-offset:2px; }
 
-  .banner{ background: linear-gradient(90deg, rgba(244,185,66,0.14), rgba(244,185,66,0.04)); border:1px solid rgba(244,185,66,0.35); border-radius: var(--radius); padding:12px 14px; margin-bottom:16px; font-size:13.5px; line-height:1.4; display:none; }
-  .banner.show{display:block;}
-  .banner b{color:var(--gold);}
+  /* Notices: a coloured rail down the left edge and a matching icon chip, so
+     severity reads at a glance instead of every message looking alike. Gold is
+     informational, red is a genuine problem. */
+  .banner{
+    position: relative; display: none;
+    background: var(--surface);
+    border: 1px solid rgba(244,185,66,0.28);
+    border-left: 3px solid var(--gold);
+    border-radius: 10px; padding: 12px 14px 12px 42px;
+    margin-bottom: 14px; font-size: 13px; line-height: 1.45;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  }
+  .banner.show{ display: block; }
+  .banner::before{
+    content: 'i'; position: absolute; left: 13px; top: 12px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(244,185,66,0.18); color: var(--gold);
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .banner b{ color: var(--gold); font-weight: 700; }
+  /* Problem state: storage blocked, sync unreachable, data stale. */
+  .banner-alert{
+    border-color: rgba(217,105,92,0.32);
+    border-left-color: var(--danger);
+  }
+  .banner-alert::before{
+    content: '!'; background: rgba(217,105,92,0.18); color: var(--danger);
+  }
+  .banner-alert b{ color: var(--danger); }
 
   .grid{ display:flex; flex-direction:column; gap:12px; margin-bottom:10px; }
 
@@ -122,8 +165,8 @@
   /* Opening title screen — shown briefly on launch, then fades out. Covers the
      app while state loads so the first thing seen is a title rather than a
      half-rendered UI. Auto-dismisses; also dismissable by tapping. */
-  /* Page-peel exit: the sheet is grabbed at its TOP edge and pulled down and
-     toward you, so the fold sweeps downward and the freed flap lifts off the page
+  /* Page-peel exit: the sheet is lifted from its BOTTOM edge and drawn up and
+     toward you, so the fold sweeps upward and the freed flap lifts off the page
      plane. Depth comes from four cues layered together, not just the curl shape:
        1. the flap ROLLS — a cylinder gradient with the far side in shadow, the
           crown catching the light, and a dark crease where it leaves the page
@@ -153,20 +196,20 @@
     height: 190px;
     pointer-events: none; opacity: 0;
     background: linear-gradient(to bottom,
-      rgba(0,0,0,0.46) 0%,
-      rgba(0,0,0,0.32) 9%,
-      rgba(0,0,0,0.19) 22%,
-      rgba(0,0,0,0.10) 38%,
-      rgba(0,0,0,0.04) 60%,
-      rgba(0,0,0,0) 100%);
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,0.04) 40%,
+      rgba(0,0,0,0.10) 62%,
+      rgba(0,0,0,0.19) 78%,
+      rgba(0,0,0,0.32) 91%,
+      rgba(0,0,0,0.46) 100%);
   }
   /* The rolled flap itself. Gradient runs across the cylinder from its far side
      (in shadow, furthest from the viewer) through the lit crown to the crease. */
   #splashCurl{
     position: fixed; left: 0; right: 0; top: 0;
     height: 0; pointer-events: none; opacity: 0;
-    transform-origin: center bottom;
-    background: linear-gradient(to bottom,
+    transform-origin: center top;
+    background: linear-gradient(to top,
       #6d8087 0%,
       #93a6ac 8%,
       #c2d0d4 22%,
@@ -176,8 +219,25 @@
       #cdd9dd 86%,
       #93a3a8 95%,
       rgba(18,28,32,0.72) 100%);
-    border-radius: 50% 50% 6px 6px / 26% 26% 4px 4px;
+    border-radius: 6px 6px 50% 50% / 4px 4px 26% 26%;
+    box-shadow: 0 -20px 38px rgba(0,0,0,0.5), 0 -4px 10px rgba(0,0,0,0.38);
   }
+  /* Survey picker on the title screen — fades in once the title has had time to
+     read, and choosing one is what triggers the peel. */
+  #splashSurveys{
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 26px; width: min(310px, 80vw);
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  #splashScreen.choosing #splashSurveys{ opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .splash-survey-btn{
+    width: 100%; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(150,200,215,0.35); color: #E8F1F2;
+    border-radius: 12px; padding: 13px 14px; font-size: 14px; font-weight: 600;
+    font-family: 'Space Grotesk', -apple-system, sans-serif; cursor: pointer;
+  }
+  .splash-survey-btn:active{ transform: scale(0.98); }
   #splashScreen.peeling #splashCurl,
   #splashScreen.peeling #splashBend{ opacity: 1; }
   #splashScreen.hiding{ opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s ease; }
@@ -189,10 +249,24 @@
     width: 74px; height: auto; margin-bottom: 16px;
     filter: drop-shadow(0 4px 14px rgba(0,0,0,0.5));
   }
+  /* Wordmark: "Field" light and wide, "Book" heavy, set in the mono face with
+     a brushed gradient fill and a hairline rule beneath, so it reads as a mark
+     rather than just large text. */
   #splashTitle{
-    font-family: 'Space Grotesk', -apple-system, sans-serif;
-    font-size: 27px; font-weight: 700; letter-spacing: 0.01em;
-    color: #E8F1F2; margin-bottom: 5px;
+    /* Zilla Slab — a slab serif, deliberately different from the mono used for
+       data and the grotesk used for UI. Gives the wordmark the feel of something
+       printed on a notebook cover rather than rendered by the app. */
+    font-family: 'Zilla Slab', Georgia, serif;
+    font-size: 34px; font-weight: 700; letter-spacing: 0.005em;
+    margin-bottom: 9px; position: relative; padding-bottom: 10px;
+    background: linear-gradient(170deg, #ffffff 0%, #d2e8f0 38%, #8fbccd 70%, #6d9bad 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  #splashTitle .wm-light{ font-weight: 400; font-style: italic; letter-spacing: 0.01em; opacity: 0.9; }
+  #splashTitle::after{
+    content: ''; position: absolute; left: 10%; right: 10%; bottom: 0; height: 1px;
+    background: linear-gradient(to right, transparent, rgba(160,215,235,0.8), transparent);
   }
   #splashSub{
     font-family: 'IBM Plex Mono', monospace;
@@ -201,11 +275,13 @@
   }
   /* A turtle swims across beneath the title while it loads */
   /* The turtle hazes in — fading up through a blur — rather than appearing
-     abruptly the instant its image loads. Delayed slightly so the logo and title
-     settle first, then it surfaces out of the water. */
+     abruptly the instant its image loads. Full viewport width and unclipped, so
+     its only boundary is the screen edge: it used to vanish at the edge of a
+     250px box and reappear awkwardly, which was very obvious on a phone. */
   #splashWater{
-    position: relative; width: 250px; height: 96px; margin-top: 22px;
-    overflow: hidden;
+    position: absolute; left: 0; right: 0; top: 46%;
+    height: 190px;
+    pointer-events: none;
     animation: turtleHazeIn 1.8s ease-out 0.5s both;
   }
   @keyframes turtleHazeIn{
@@ -213,14 +289,6 @@
     45%  { opacity: 0.45; filter: blur(3px); }
     100% { opacity: 1; filter: blur(0); }
   }
-  /* Swim motion driven by the flipper stroke, no side-to-side tacking.
-     Each stroke: the turtle lunges forward immediately as the flippers pull,
-     then decelerates and coasts as they recover — most of the distance is
-     covered in the first third of each stroke. The gentle rise/fall and the
-     pitch angling both happen during the COAST, not the lunge, which is how a
-     real turtle glides: it drives forward hard, then eases and drifts.
-     Horizontal and vertical stay on separate nested elements so the lunge and
-     the drift can use different easing curves. */
   #splashTurtle{
     position: absolute; top: 0; left: 0;
     width: 38px; height: auto;
@@ -231,42 +299,42 @@
      is covered in the first ~8% (the pull), then it slows to a coast. The
      keyframe spacing IS the acceleration curve, so this runs linear. */
   @keyframes splashSwimX{
-    0%       { transform: translateX(-46px); }
-    2.857%   { transform: translateX(-20px); }
-    5.714%   { transform: translateX(-10px); }
-    8.571%   { transform: translateX(-6px); }
-    11.429%  { transform: translateX(-4px); }
-    14.286%  { transform: translateX(-3px); }
-    17.143%  { transform: translateX(22px); }
-    20%      { transform: translateX(33px); }
-    22.857%  { transform: translateX(37px); }
-    25.714%  { transform: translateX(38px); }
-    28.571%  { transform: translateX(39px); }
-    31.429%  { transform: translateX(65px); }
-    34.286%  { transform: translateX(75px); }
-    37.143%  { transform: translateX(79px); }
-    40%      { transform: translateX(81px); }
-    42.857%  { transform: translateX(82px); }
-    45.714%  { transform: translateX(107px); }
-    48.571%  { transform: translateX(118px); }
-    51.429%  { transform: translateX(122px); }
-    54.286%  { transform: translateX(124px); }
-    57.143%  { transform: translateX(124px); }
-    60%      { transform: translateX(150px); }
-    62.857%  { transform: translateX(160px); }
-    65.714%  { transform: translateX(164px); }
-    68.571%  { transform: translateX(166px); }
-    71.429%  { transform: translateX(167px); }
-    74.286%  { transform: translateX(192px); }
-    77.143%  { transform: translateX(203px); }
-    80%      { transform: translateX(207px); }
-    82.857%  { transform: translateX(209px); }
-    85.714%  { transform: translateX(209px); }
-    88.571%  { transform: translateX(235px); }
-    91.429%  { transform: translateX(245px); }
-    94.286%  { transform: translateX(250px); }
-    97.143%  { transform: translateX(251px); }
-    100%     { transform: translateX(252px); }
+    0%       { transform: translateX(calc(-52px + 0.0000 * (100vw + 64px))); }
+    2.857%   { transform: translateX(calc(-52px + 0.0857 * (100vw + 64px))); }
+    5.714%   { transform: translateX(calc(-52px + 0.1206 * (100vw + 64px))); }
+    8.571%   { transform: translateX(calc(-52px + 0.1348 * (100vw + 64px))); }
+    11.429%  { transform: translateX(calc(-52px + 0.1405 * (100vw + 64px))); }
+    14.286%  { transform: translateX(calc(-52px + 0.1429 * (100vw + 64px))); }
+    17.143%  { transform: translateX(calc(-52px + 0.2286 * (100vw + 64px))); }
+    20%      { transform: translateX(calc(-52px + 0.2634 * (100vw + 64px))); }
+    22.857%  { transform: translateX(calc(-52px + 0.2776 * (100vw + 64px))); }
+    25.714%  { transform: translateX(calc(-52px + 0.2834 * (100vw + 64px))); }
+    28.571%  { transform: translateX(calc(-52px + 0.2857 * (100vw + 64px))); }
+    31.429%  { transform: translateX(calc(-52px + 0.3714 * (100vw + 64px))); }
+    34.286%  { transform: translateX(calc(-52px + 0.4063 * (100vw + 64px))); }
+    37.143%  { transform: translateX(calc(-52px + 0.4205 * (100vw + 64px))); }
+    40%      { transform: translateX(calc(-52px + 0.4262 * (100vw + 64px))); }
+    42.857%  { transform: translateX(calc(-52px + 0.4286 * (100vw + 64px))); }
+    45.714%  { transform: translateX(calc(-52px + 0.5143 * (100vw + 64px))); }
+    48.571%  { transform: translateX(calc(-52px + 0.5492 * (100vw + 64px))); }
+    51.429%  { transform: translateX(calc(-52px + 0.5633 * (100vw + 64px))); }
+    54.286%  { transform: translateX(calc(-52px + 0.5691 * (100vw + 64px))); }
+    57.143%  { transform: translateX(calc(-52px + 0.5714 * (100vw + 64px))); }
+    60%      { transform: translateX(calc(-52px + 0.6572 * (100vw + 64px))); }
+    62.857%  { transform: translateX(calc(-52px + 0.6920 * (100vw + 64px))); }
+    65.714%  { transform: translateX(calc(-52px + 0.7062 * (100vw + 64px))); }
+    68.571%  { transform: translateX(calc(-52px + 0.7119 * (100vw + 64px))); }
+    71.429%  { transform: translateX(calc(-52px + 0.7143 * (100vw + 64px))); }
+    74.286%  { transform: translateX(calc(-52px + 0.8000 * (100vw + 64px))); }
+    77.143%  { transform: translateX(calc(-52px + 0.8349 * (100vw + 64px))); }
+    80%      { transform: translateX(calc(-52px + 0.8490 * (100vw + 64px))); }
+    82.857%  { transform: translateX(calc(-52px + 0.8548 * (100vw + 64px))); }
+    85.714%  { transform: translateX(calc(-52px + 0.8571 * (100vw + 64px))); }
+    88.571%  { transform: translateX(calc(-52px + 0.9429 * (100vw + 64px))); }
+    91.429%  { transform: translateX(calc(-52px + 0.9777 * (100vw + 64px))); }
+    94.286%  { transform: translateX(calc(-52px + 0.9919 * (100vw + 64px))); }
+    97.143%  { transform: translateX(calc(-52px + 0.9977 * (100vw + 64px))); }
+    100%     { transform: translateX(calc(100vw + 12px)); }
   }  /* Vertical + pitch: holds steady through each lunge, then rises and angles
      during the coast — the nose lifts as the turtle glides, settling back just
      before the next pull. Base 90deg = facing right (artwork points up at 0). */
@@ -717,12 +785,17 @@
 <body>
 <div id="splashScreen" aria-hidden="true">
   <div id="splashPage">
+  <div id="splashWater">
+    <div id="splashTurtle"><img id="splashTurtleInner" src="" alt=""></div>
+  </div>
   <div id="splashInner">
     <img id="splashLogo" src="data:image/png;base64,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" alt="">
-    <div id="splashTitle">Field Book</div>
+    <div id="splashTitle"><span class="wm-light">Field</span>Notes</div>
     <div id="splashSub">Canaveral National Seashore</div>
-    <div id="splashWater">
-      <div id="splashTurtle"><img id="splashTurtleInner" src="" alt=""></div>
+    <div id="splashSurveys">
+      <button type="button" class="splash-survey-btn" data-mode="turtle">Sea Turtle Nest Survey</button>
+      <button type="button" class="splash-survey-btn" data-mode="nestInventory">Nest Inventory</button>
+      <button type="button" class="splash-survey-btn" data-mode="tigerBeetle">Eastern Beach Tiger Beetle Survey</button>
     </div>
   </div>
   </div>
@@ -733,8 +806,8 @@
 <header>
   <img src="data:image/png;base64,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" alt="National Park Service arrowhead" class="nps-logo" id="npsLogoBtn">
   <div class="title-block">
-    <span class="eyebrow" style="display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;">
-      <span class="app-name">Field Book</span>
+    <span class="eyebrow">
+      <span class="app-name"><span class="wm-light">Field</span>Notes</span>
       <span class="eyebrow-sep">·</span>
       Canaveral National Seashore
       <span id="agolStatusBar" style="display:none; align-items:center; gap:5px; cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:1px 8px; height:20px;" role="button" aria-label="Sync master species totals">
@@ -778,11 +851,11 @@
   First time on this device — <b>tap ⚙ Settings</b> to set observer/date and each species to wherever your counts actually stand. After that, <b>+ Add Grid Tally</b> is the main button you need.
 </div>
 
-<div class="banner" id="storageWarningBanner" style="border-color: rgba(217,105,92,0.5); background: linear-gradient(90deg, rgba(217,105,92,0.16), rgba(217,105,92,0.04));">
-  ⚠ <b>This browser is blocking storage.</b> Nothing you enter will be saved. This usually means Incognito/Private mode, or a browser setting blocking site data. Use <b>Export to Excel</b> before closing this page either way.
+<div class="banner banner-alert" id="storageWarningBanner">
+  <b>This browser is blocking storage.</b> Nothing you enter will be saved. This usually means Incognito/Private mode, or a browser setting blocking site data. Use <b>Export to Excel</b> before closing this page either way.
 </div>
 
-<div class="banner" id="agolWarningBanner" style="display:none; border-color:rgba(217,105,92,0.5); background:linear-gradient(90deg, rgba(217,105,92,0.16), rgba(217,105,92,0.04)); align-items:center; justify-content:space-between; gap:10px;">
+<div class="banner banner-alert" id="agolWarningBanner" style="display:none; align-items:center; justify-content:space-between; gap:10px;">
   <span id="agolWarningText">⚠ Master species totals haven't synced in over 12 hours — counts on this device may be out of date.</span>
   <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
     <button type="button" class="copy-btn" id="agolWarningSyncBtn" style="padding:5px 9px; font-size:11px;">↓ Sync</button>
@@ -3721,8 +3794,8 @@
     if(isNativeApp()){
       window.Capacitor.Plugins.BackgroundGeolocation.start(
         {
-          backgroundMessage: 'Tracking your grid position for Field Book — tap to cancel.',
-          backgroundTitle: 'Field Book is tracking your location',
+          backgroundMessage: 'Tracking your grid position for Field Notes — tap to cancel.',
+          backgroundTitle: 'Field Notes is tracking your location',
           requestPermissions: true,
           stale: false,
           distanceFilter: 5
@@ -5316,7 +5389,7 @@
   }
 
   async function exportStateBackup(){
-    const filename = `field-book-backup-${state.meta.date || todayStr()}.json`;
+    const filename = `field-notes-backup-${state.meta.date || todayStr()}.json`;
     try{
       const json = JSON.stringify(state, null, 2);
       if(isNativeApp()){
@@ -5347,7 +5420,7 @@
       const text = await file.text();
       const imported = JSON.parse(text);
       if(!imported || typeof imported !== 'object' || !imported.species){
-        showToast('That file doesn\'t look like a Field Book backup');
+        showToast('That file doesn\'t look like a Field Notes backup');
         return;
       }
       if(!confirm('Import this backup? This REPLACES all current data on this device — counts, grid history, everything.')) return;
@@ -5965,28 +6038,138 @@
   // motion from the flipper strokes and bring the jank back, so the stroke count
   // is the right lever: each stroke stays locked to the GIF cycle.
 
+  // The turtle wanders rather than looping one fixed path. It crosses once
+  // predictably on first appearance, then picks its own way around: new random
+  // headings, spells of near-motionless drifting, and occasionally fading out and
+  // surfacing somewhere else. Driven per-frame in JS because CSS keyframes can
+  // only ever replay a single fixed route.
+  //
+  // Motion stays stroke-synced throughout: each stroke is a thrust immediately
+  // followed by an exponential decay, timed to the GIF's own flipper cycle, so
+  // the body always moves in time with its own strokes.
+  let splashTurtleRAF = null;
   function initSplashTurtle(){
-    const outer = document.getElementById('splashTurtle');       // drives horizontal travel
-    const img = document.getElementById('splashTurtleInner');    // drives the S weave + banking
-    if(!outer || !img) return;
-    const picked = pickTurtleTemplate();
-    if(!picked || !picked.el) return;
-    img.src = picked.el.src;
+    const outer = document.getElementById('splashTurtle');
+    const inner = document.getElementById('splashTurtleInner');
+    if(!outer || !inner) return;
+    if(state?.meta?.turtlesEnabled === false){ outer.style.display = 'none'; return; }
 
-    // Duration = an exact whole number of stroke cycles, so the loop point and
-    // every surge/turn coincide with a real flipper beat instead of drifting
-    // against it.
-    const strokeMs = TURTLE_STROKE_MS[picked.el.id] || 840;
-    const crossingMs = strokeMs * SPLASH_STROKES_PER_CROSSING;
-    // Horizontal is linear: the surge/coast rhythm lives in the keyframe spacing
-    // itself, so easing on top would fight it and smear the pulses.
-    outer.style.animation = `splashSwimX ${crossingMs}ms linear infinite`;
-    // Vertical is ALSO linear: the thrust-then-fade shape (and the banking that
-    // rides it) is baked into the keyframe values themselves, so an easing curve
-    // on top would smear the very burst-then-glide profile we're after.
-    img.style.animation = `splashSwimY ${crossingMs}ms linear infinite`;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const picked0 = pickTurtleTemplate();
+    if(picked0 && picked0.el) inner.src = picked0.el.src;
+    if(reduceMotion){
+      outer.style.transform = 'translateX(40vw)';
+      inner.style.transform = 'translateY(70px) rotate(90deg)';
+      return;
+    }
+
+    // JS owns the motion now — make sure no leftover CSS animation fights it.
+    outer.style.animation = 'none';
+    inner.style.animation = 'none';
+
+    const K = 4.5;
+    const decay = f => (1 - Math.exp(-K*f)) / (1 - Math.exp(-K));
+
+    function buildLeg(isFirst){
+      const picked = pickTurtleTemplate();
+      const strokeMs = (picked && TURTLE_STROKE_MS[picked.el.id]) || 700;
+      const W = window.innerWidth;
+      const playH = 150;
+      const strokes = 13 + Math.floor(Math.random()*7); // 13-19 per crossing — fewer px per stroke, so it covers ground at a believable pace
+      // No drift on the very first crossing — a pause before the turtle has even
+      // been seen once just reads as the animation being broken.
+      const hasDrift = !isFirst && Math.random() < 0.6;
+      const driftAt = hasDrift ? 2 + Math.floor(Math.random()*Math.max(1, strokes-3)) : -1;
+
+      const segs = [];
+      let acc = 0;
+      for(let n=0; n<strokes; n++){
+        segs.push({type:'s', ms:strokeMs, start:acc}); acc += strokeMs;
+        if(n === driftAt){
+          const dms = 900 + Math.random()*1500;
+          segs.push({type:'d', ms:dms, start:acc}); acc += dms;
+        }
+      }
+      const units = strokes + (hasDrift ? 0.35 : 0);
+      return {
+        picked, W, playH,
+        goingRight: isFirst ? true : Math.random() < 0.5,
+        segs, durMs: acc,
+        unitDist: (W + 170) / units,
+        yStart: Math.random()*playH,
+        yEnd: Math.random()*playH,
+        amp: 8 + Math.random()*18,
+        cycles: 0.8 + Math.random()*1.6,
+        fadeMs: 700,
+        waitMs: isFirst ? 500 : 600 + Math.random()*2400,
+        t0: null
+      };
+    }
+
+    // Distance covered by elapsed time: each stroke is a thrust that decays to a
+    // glide; a drift segment creeps forward at a fraction of that, so the turtle
+    // visibly coasts rather than stopping dead.
+    function distAt(L, e){
+      let d = 0;
+      for(const sg of L.segs){
+        const unit = sg.type === 's' ? L.unitDist : L.unitDist * 0.35;
+        if(e >= sg.start + sg.ms){ d += unit; continue; }
+        const f = Math.max(0, (e - sg.start) / sg.ms);
+        d += unit * (sg.type === 's' ? decay(f) : f);
+        break;
+      }
+      return d;
+    }
+
+    let leg = buildLeg(true);
+    let waitingUntil = 0;
+
+    function frame(now){
+      const splash = document.getElementById('splashScreen');
+      if(!splash || splash.style.display === 'none'){ splashTurtleRAF = null; return; }
+
+      if(waitingUntil){
+        if(now < waitingUntil){ splashTurtleRAF = requestAnimationFrame(frame); return; }
+        waitingUntil = 0;
+        leg = buildLeg(false);
+        if(leg.picked && leg.picked.el) inner.src = leg.picked.el.src;
+      }
+      if(leg.t0 === null) leg.t0 = now;
+
+      const e = now - leg.t0;
+      if(e >= leg.durMs){
+        outer.style.opacity = '0';
+        waitingUntil = now + leg.waitMs;
+        leg.t0 = null;
+        splashTurtleRAF = requestAnimationFrame(frame);
+        return;
+      }
+
+      const p = e / leg.durMs;
+      const d = distAt(leg, e);
+      const x = leg.goingRight ? (-85 + d) : (leg.W + 85 - d);
+      const y = leg.yStart + (leg.yEnd - leg.yStart)*p
+              + Math.sin(2*Math.PI*leg.cycles*p) * leg.amp;
+
+      // True heading from the actual direction of travel, so it banks into its
+      // turns instead of sliding through them flat.
+      const dyDp = (leg.yEnd - leg.yStart) + leg.amp*2*Math.PI*leg.cycles*Math.cos(2*Math.PI*leg.cycles*p);
+      const dxDp = (leg.goingRight ? 1 : -1) * (leg.W + 170);
+      const angle = Math.atan2(dyDp, dxDp) * (180/Math.PI) + 90;
+
+      const fadeIn = Math.min(1, e / leg.fadeMs);
+      const fadeOut = Math.min(1, (leg.durMs - e) / leg.fadeMs);
+      outer.style.opacity = String(Math.min(fadeIn, fadeOut));
+      outer.style.transform = `translateX(${x.toFixed(1)}px)`;
+      inner.style.transform = `translateY(${y.toFixed(1)}px) rotate(${angle.toFixed(1)}deg)`;
+
+      splashTurtleRAF = requestAnimationFrame(frame);
+    }
+    if(splashTurtleRAF) cancelAnimationFrame(splashTurtleRAF);
+    splashTurtleRAF = requestAnimationFrame(frame);
   }
-  // Page peel: the sheet is pulled from its TOP edge downward, the freed flap
+
+  // Page peel: the sheet is lifted from its BOTTOM edge and drawn upward, the freed flap
   // lifting off the page plane toward the viewer. Per-frame in JS rather than CSS
   // keyframes because the fold position, flap thickness, perspective scale and
   // cast shadow all have to track the live viewport height together.
@@ -6006,16 +6189,21 @@
       return;
     }
 
+    splash.classList.remove('choosing');
     splash.classList.add('peeling');
     const H = window.innerHeight;
     const start = performance.now();
 
     function frame(now){
       const raw = Math.min(1, (now - start) / SPLASH_PEEL_MS);
-      // Slow lift, then accelerate — paper resists until the fold is established.
+      // Slow initial lift, then it goes — paper resists until the fold is set.
       const t = raw < 0.25
         ? (raw/0.25) * (raw/0.25) * 0.16
         : 0.16 + 0.84 * Math.pow((raw-0.25)/0.75, 1.35);
+
+      // Fold sweeps UPWARD from the bottom edge: the sheet is lifted from its
+      // bottom edge and drawn up and over toward the viewer.
+      const foldY = H - t * (H + 120);
 
       if(raw >= 1){
         splash.style.display = 'none';
@@ -6023,29 +6211,22 @@
         return;
       }
 
-      // Fold sweeps top -> bottom, running past H so the flap fully clears.
-      const foldY = t * (H + 120);
+      // Everything ABOVE the fold is still flat page; below it has peeled away.
+      page.style.clipPath = `inset(0 0 ${Math.max(0, H - foldY)}px 0)`;
 
-      // Flat page is everything BELOW the fold.
-      page.style.clipPath = `inset(${Math.max(0, foldY)}px 0 0 0)`;
-
-      // Flap thickens as more paper rolls up, easing off near the end.
-      const thickness = 12 + 86 * Math.sin(Math.PI * Math.min(1, t * 1.05));
-      // ...and scales up because it's travelling toward the viewer, not just
-      // across the screen. This is the cue that reads as depth rather than slide.
-      const lift = 1 + t * 0.30;
-
+      // The roll thickens as more paper gathers into it, and widens past the
+      // screen edges as it comes toward the viewer — that lateral growth is what
+      // stops it reading as a flat bar sliding down.
+      const thickness = 14 + 96 * Math.sin(Math.PI * Math.min(1, t * 1.05));
+      const nearness = 1 + 0.10 * t;
       curl.style.height = thickness + 'px';
-      // Bottom edge of the flap sits exactly on the fold; it extends upward over
-      // the already-revealed area, the way a real flap folds back over itself.
-      curl.style.transform = `translateY(${foldY - thickness}px) scale(${lift.toFixed(3)})`;
-      // Shadow thrown down onto the flat page — grows and softens as it rises.
-      curl.style.boxShadow = `0 ${(10 + 30*t).toFixed(1)}px ${(20 + 46*t).toFixed(1)}px rgba(0,0,0,${(0.34 + 0.22*t).toFixed(3)})`;
+      curl.style.transform =
+        `translateY(${foldY}px) scaleX(${nearness.toFixed(4)}) perspective(900px) rotateX(${(16 * t).toFixed(2)}deg)`;
 
-      // Bend shading rides just below the fold, on the page still lying flat.
-      const bendH = Math.min(220, 70 + 170 * t);
+      // Bend shading on the page, ending exactly at the fold.
+      const bendH = Math.min(210, 70 + 160 * t);
       bend.style.height = bendH + 'px';
-      bend.style.transform = `translateY(${foldY}px)`;
+      bend.style.transform = `translateY(${foldY - bendH}px)`; // shading on the page above, ending at the fold
 
       const fade = Math.min(1, t * 8);
       curl.style.opacity = String(fade);
@@ -6056,18 +6237,33 @@
     requestAnimationFrame(frame);
   }
 
+  // The title screen no longer dismisses itself — after it's had time to read,
+  // the survey picker fades in and the peel happens when a survey is chosen. That
+  // makes the transition a response to the user's choice rather than a timer.
   function dismissSplash(){
     const splash = document.getElementById('splashScreen');
     if(!splash || splash.dataset.peeling === '1') return;
     const elapsed = Date.now() - splashStart;
-    setTimeout(peelSplash, Math.max(0, SPLASH_MIN_MS - elapsed));
+    setTimeout(()=>{ splash.classList.add('choosing'); }, Math.max(0, SPLASH_MIN_MS - elapsed));
   }
+
 
   (async function init(){
     initSplashTurtle();
     // Let people skip the title screen by tapping it
     const splashEl = document.getElementById('splashScreen');
-    if(splashEl) splashEl.addEventListener('click', peelSplash); // tapping starts the peel early
+    // Choosing a survey sets the mode AND starts the peel — the transition is the
+    // response to that choice, so there's no tap-anywhere-to-skip that could fire
+    // accidentally before a survey has been picked.
+    document.querySelectorAll('.splash-survey-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        state.meta.currentMode = btn.dataset.mode;
+        await saveState();
+        applyMode();
+        renderSurveyPicker();
+        peelSplash();
+      });
+    });
 
     // Populate the species/disturbance dropdowns from their single source of
     // truth (SPECIES / DISTURBANCE_CODES) — was previously duplicated as static

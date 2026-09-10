@@ -1,6 +1,6 @@
 {
-  "name": "Field Book - Canaveral National Seashore",
-  "short_name": "Field Book",
+  "name": "Field Notes - Canaveral National Seashore",
+  "short_name": "Field Notes",
   "description": "Field data collection for Canaveral National Seashore — sea turtle nest surveys, nest inventory, and tiger beetle surveys.",
   "start_url": "./index.html",
   "scope": "./",
