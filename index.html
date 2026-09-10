@@ -122,15 +122,21 @@
   /* Opening title screen — shown briefly on launch, then fades out. Covers the
      app while state loads so the first thing seen is a title rather than a
      half-rendered UI. Auto-dismisses; also dismissable by tapping. */
-  /* Page-peel exit: the whole splash is a sheet of paper. A diagonal fold sweeps
-     from the top-right corner down to the bottom-left; ahead of the fold the
-     sheet is clipped away to reveal the app, and along the fold sits the curled
-     white underside of the page with a shadow cast beneath it. Driven from JS
-     (peelSplash) rather than CSS keyframes because the fold geometry depends on
-     the actual viewport dimensions. */
+  /* Page-peel exit: the sheet is grabbed at its TOP edge and pulled down and
+     toward you, so the fold sweeps downward and the freed flap lifts off the page
+     plane. Depth comes from four cues layered together, not just the curl shape:
+       1. the flap ROLLS — a cylinder gradient with the far side in shadow, the
+          crown catching the light, and a dark crease where it leaves the page
+       2. it SCALES UP as it advances, because it's getting closer to the viewer
+       3. it CASTS a shadow down onto the still-flat page below the fold, and that
+          shadow grows and softens as the flap rises further off the surface
+       4. the flat page DARKENS as it curves up into the fold — a hard-edged clip
+          with no bend shading always reads flat no matter how good the curl is
+     Driven per-frame from JS (peelSplash) since all four track the live viewport. */
   #splashScreen{
     position: fixed; inset: 0; z-index: 200;
     display: flex; align-items: center; justify-content: center;
+    perspective: 1200px;
   }
   #splashPage{
     position: absolute; inset: 0;
@@ -138,28 +144,42 @@
     background: radial-gradient(ellipse at 50% 35%, #16323A 0%, #0B1416 70%);
     will-change: clip-path;
   }
-  /* The rolled-back underside of the sheet. Positioned and rotated in JS so it
-     always lies exactly along the fold line. The gradient runs across its
-     thickness to read as a cylinder of paper rather than a flat band: dark at
-     the crease, bright along the roll, shading off at the loose edge. */
-  #splashCurl{
-    position: fixed; top: 0; left: 0;
-    width: 300vmax; height: 0;
-    transform-origin: center center;
-    pointer-events: none;
-    opacity: 0;
+  /* Bend shading on the still-flat page, darkest right at the fold and easing off
+     further down — the paper curving up out of the flat plane. left:0 matters:
+     these are fixed children of a flex container, so with left:auto their static
+     position resolves to the container's CENTRE, not the edge. */
+  #splashBend{
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 190px;
+    pointer-events: none; opacity: 0;
     background: linear-gradient(to bottom,
-      rgba(0,0,0,0.30) 0%,
-      #f7fbfc 6%,
-      #ffffff 26%,
-      #e6eef0 58%,
-      #c2cfd3 82%,
-      #9fb0b5 96%,
-      rgba(120,140,146,0.85) 100%);
-    box-shadow: 0 14px 26px rgba(0,0,0,0.45);
-    border-radius: 0 0 3px 3px;
+      rgba(0,0,0,0.46) 0%,
+      rgba(0,0,0,0.32) 9%,
+      rgba(0,0,0,0.19) 22%,
+      rgba(0,0,0,0.10) 38%,
+      rgba(0,0,0,0.04) 60%,
+      rgba(0,0,0,0) 100%);
   }
-  #splashScreen.peeling #splashCurl{ opacity: 1; }
+  /* The rolled flap itself. Gradient runs across the cylinder from its far side
+     (in shadow, furthest from the viewer) through the lit crown to the crease. */
+  #splashCurl{
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 0; pointer-events: none; opacity: 0;
+    transform-origin: center bottom;
+    background: linear-gradient(to bottom,
+      #6d8087 0%,
+      #93a6ac 8%,
+      #c2d0d4 22%,
+      #eef5f7 42%,
+      #ffffff 58%,
+      #f0f7f8 72%,
+      #cdd9dd 86%,
+      #93a3a8 95%,
+      rgba(18,28,32,0.72) 100%);
+    border-radius: 50% 50% 6px 6px / 26% 26% 4px 4px;
+  }
+  #splashScreen.peeling #splashCurl,
+  #splashScreen.peeling #splashBend{ opacity: 1; }
   #splashScreen.hiding{ opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s ease; }
   #splashInner{
     display: flex; flex-direction: column; align-items: center;
@@ -180,9 +200,18 @@
     color: #7FA3AA;
   }
   /* A turtle swims across beneath the title while it loads */
+  /* The turtle hazes in — fading up through a blur — rather than appearing
+     abruptly the instant its image loads. Delayed slightly so the logo and title
+     settle first, then it surfaces out of the water. */
   #splashWater{
     position: relative; width: 250px; height: 96px; margin-top: 22px;
     overflow: hidden;
+    animation: turtleHazeIn 1.8s ease-out 0.5s both;
+  }
+  @keyframes turtleHazeIn{
+    0%   { opacity: 0; filter: blur(7px); }
+    45%  { opacity: 0.45; filter: blur(3px); }
+    100% { opacity: 1; filter: blur(0); }
   }
   /* Swim motion driven by the flipper stroke, no side-to-side tacking.
      Each stroke: the turtle lunges forward immediately as the flippers pull,
@@ -284,7 +313,8 @@
   }
   @media (prefers-reduced-motion: reduce){
     #splashInner{ animation: none; }
-    #splashCurl{ display: none; }
+    #splashCurl, #splashBend{ display: none; }
+    #splashWater{ animation: none; }
     #splashTurtle{ animation: none; transform: translateX(100px); }
     #splashTurtleInner{ animation: none; transform: translateY(34px) rotate(90deg); }
   }
@@ -476,15 +506,23 @@
     width: 200%; height: 100%;
     display: block;
   }
-  .sync-wave-back path{ fill: rgba(46,125,165,0.75); }
-  .sync-wave-front path{ fill: rgba(120,200,235,0.55); }
+  /* Depth comes from three things the flat fills lacked: a bright crest line
+     fading into darker water below (each layer has its own SVG gradient), the
+     layers getting progressively lighter and more transparent toward the front,
+     and a soft drop-shadow so each wave casts onto the one behind it. */
   .sync-wave-back{ animation: syncWaveSlideA 3.4s linear infinite; }
-  .sync-wave-front{ animation: syncWaveSlideB 2.3s linear infinite reverse; }
+  .sync-wave-mid{ animation: syncWaveSlideC 2.9s linear infinite; filter: drop-shadow(0 -2px 3px rgba(5,35,55,0.5)); }
+  .sync-wave-front{ animation: syncWaveSlideB 2.3s linear infinite reverse; filter: drop-shadow(0 -3px 4px rgba(5,35,55,0.45)); }
   /* Sliding exactly half the element's width loops seamlessly, because the path
      contains two identical wave periods across that span. */
   @keyframes syncWaveSlideA{
     0%   { transform: translateX(0) translateY(0); }
     50%  { transform: translateX(-25%) translateY(-1.5px); }
+    100% { transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes syncWaveSlideC{
+    0%   { transform: translateX(0) translateY(0); }
+    50%  { transform: translateX(-25%) translateY(-1px); }
     100% { transform: translateX(-50%) translateY(0); }
   }
   @keyframes syncWaveSlideB{
@@ -688,6 +726,7 @@
     </div>
   </div>
   </div>
+  <div id="splashBend"></div>
   <div id="splashCurl"></div>
 </div>
 
@@ -1218,10 +1257,37 @@
 <div id="syncWaveBubble" aria-hidden="true">
   <div class="sync-water">
     <svg class="sync-wave-surface sync-wave-back" viewBox="0 0 248 100" preserveAspectRatio="none">
-      <path d="M0,12 C15.5,6.67 46.5,6.67 62,12 C77.5,17.33 108.5,17.33 124,12 C139.5,6.67 170.5,6.67 186,12 C201.5,17.33 232.5,17.33 248,12 L248,100 L0,100 Z"/>
+      <defs>
+        <linearGradient id="wgBack" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7fc4e2" stop-opacity="0.95"/>
+          <stop offset="6%" stop-color="#3d8fb8" stop-opacity="0.85"/>
+          <stop offset="45%" stop-color="#256a91" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#12455f" stop-opacity="0.9"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,12 C15.5,6.67 46.5,6.67 62,12 C77.5,17.33 108.5,17.33 124,12 C139.5,6.67 170.5,6.67 186,12 C201.5,17.33 232.5,17.33 248,12 L248,100 L0,100 Z" fill="url(#wgBack)"/>
+    </svg>
+    <svg class="sync-wave-surface sync-wave-mid" viewBox="0 0 248 100" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="wgMid" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#a8ddf0" stop-opacity="0.9"/>
+          <stop offset="5%" stop-color="#5aa8cd" stop-opacity="0.7"/>
+          <stop offset="55%" stop-color="#2f7fa8" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#1a5a7d" stop-opacity="0.6"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,16 C15.5,11 46.5,21 62,16 C77.5,11 108.5,21 124,16 C139.5,11 170.5,21 186,16 C201.5,11 232.5,21 248,16 L248,100 L0,100 Z" fill="url(#wgMid)"/>
     </svg>
     <svg class="sync-wave-surface sync-wave-front" viewBox="0 0 248 100" preserveAspectRatio="none">
-      <path d="M0,14 C15.5,18 46.5,18 62,14 C77.5,10 108.5,10 124,14 C139.5,18 170.5,18 186,14 C201.5,10 232.5,10 248,14 L248,100 L0,100 Z"/>
+      <defs>
+        <linearGradient id="wgFront" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#e2f6ff" stop-opacity="0.95"/>
+          <stop offset="4%" stop-color="#9ed6ee" stop-opacity="0.75"/>
+          <stop offset="40%" stop-color="#5fb0d4" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="#2b7ea6" stop-opacity="0.35"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,14 C15.5,18 46.5,18 62,14 C77.5,10 108.5,10 124,14 C139.5,18 170.5,18 186,14 C201.5,10 232.5,10 248,14 L248,100 L0,100 Z" fill="url(#wgFront)"/>
     </svg>
   </div>
   <span class="sync-ripple"></span>
@@ -5891,8 +5957,8 @@
   // once init has finished AND a short minimum has elapsed — without that floor
   // it would flash for a few milliseconds on a fast load, which reads as a
   // glitch rather than a title screen.
-  const SPLASH_MIN_MS = 2600;   // long enough to actually read the title
-  const SPLASH_PEEL_MS = 1500;  // how long the page takes to peel away
+  const SPLASH_MIN_MS = 4200;   // long enough to read the title and watch the turtle swim
+  const SPLASH_PEEL_MS = 1700;  // how long the page takes to peel away
   const splashStart = Date.now();
   const SPLASH_STROKES_PER_CROSSING = 7; // More strokes = less distance covered per stroke = a slower, gentler glide.
   // Slowing this down by lengthening the animation instead would desync the body
@@ -5920,16 +5986,16 @@
     // on top would smear the very burst-then-glide profile we're after.
     img.style.animation = `splashSwimY ${crossingMs}ms linear infinite`;
   }
-  // Page peel: the splash is a sheet of paper whose top-right corner lifts and
-  // rolls back, the fold sweeping diagonally down to the bottom-left to reveal
-  // the app beneath. Driven per-frame in JS rather than CSS keyframes because
-  // the fold geometry depends on the live viewport size — a fixed keyframe set
-  // would only line up at one aspect ratio.
+  // Page peel: the sheet is pulled from its TOP edge downward, the freed flap
+  // lifting off the page plane toward the viewer. Per-frame in JS rather than CSS
+  // keyframes because the fold position, flap thickness, perspective scale and
+  // cast shadow all have to track the live viewport height together.
   function peelSplash(){
     const splash = document.getElementById('splashScreen');
     const page = document.getElementById('splashPage');
     const curl = document.getElementById('splashCurl');
-    if(!splash || !page || !curl) return;
+    const bend = document.getElementById('splashBend');
+    if(!splash || !page || !curl || !bend) return;
     if(splash.dataset.peeling === '1' || splash.style.display === 'none') return;
     splash.dataset.peeling = '1';
 
@@ -5941,61 +6007,49 @@
     }
 
     splash.classList.add('peeling');
-    const W = window.innerWidth, H = window.innerHeight;
+    const H = window.innerHeight;
     const start = performance.now();
-    const SQRT2 = Math.SQRT2;
 
     function frame(now){
-      // Ease-in: the corner lifts slowly, then the peel accelerates away, which
-      // is how paper actually behaves once the fold gets going.
       const raw = Math.min(1, (now - start) / SPLASH_PEEL_MS);
-      const t = raw * raw * (3 - 2*raw) * 0.35 + raw * 0.65; // smoothstep blended toward linear
+      // Slow lift, then accelerate — paper resists until the fold is established.
+      const t = raw < 0.25
+        ? (raw/0.25) * (raw/0.25) * 0.16
+        : 0.16 + 0.84 * Math.pow((raw-0.25)/0.75, 1.35);
 
-      // Fold line: x - y = c, sweeping from the top-right corner (c = W) past
-      // the bottom-left (c = -H).
-      const c = W - t * (W + H);
-
-      // Remaining (un-peeled) region is { x - y <= c }, as a clip polygon.
-      let poly;
-      if(c >= W){
-        poly = [[0,0],[W,0],[W,H],[0,H]];
-      } else if(c >= 0){
-        poly = (W - c <= H)
-          ? [[0,0],[c,0],[W,W-c],[W,H],[0,H]]
-          : [[0,0],[c,0],[c+H,H],[0,H]];
-      } else if(c > -H){
-        poly = (W - c <= H)
-          ? [[0,-c],[W,W-c],[W,H],[0,H]]
-          : [[0,-c],[c+H,H],[0,H]];
-      } else {
-        poly = null;
-      }
-
-      if(!poly){
-        page.style.clipPath = 'polygon(0 0, 0 0, 0 0)';
-        curl.style.opacity = '0';
+      if(raw >= 1){
         splash.style.display = 'none';
         splash.classList.remove('peeling');
         return;
       }
-      page.style.clipPath = 'polygon(' + poly.map(p => `${p[0]}px ${p[1]}px`).join(', ') + ')';
 
-      // Curl thickness grows as more of the sheet rolls up, then eases off as
-      // the fold runs off the far corner.
-      const thickness = 6 + 62 * Math.sin(Math.PI * Math.min(1, t * 1.08));
+      // Fold sweeps top -> bottom, running past H so the flap fully clears.
+      const foldY = t * (H + 120);
 
-      // Sit the curl on the fold line: drop a perpendicular from the viewport
-      // centre onto x - y = c, and centre the bar there.
-      const d = ((W/2) - (H/2) - c) / SQRT2;
-      const footX = W/2 - d / SQRT2;
-      const footY = H/2 + d / SQRT2;
+      // Flat page is everything BELOW the fold.
+      page.style.clipPath = `inset(${Math.max(0, foldY)}px 0 0 0)`;
+
+      // Flap thickens as more paper rolls up, easing off near the end.
+      const thickness = 12 + 86 * Math.sin(Math.PI * Math.min(1, t * 1.05));
+      // ...and scales up because it's travelling toward the viewer, not just
+      // across the screen. This is the cue that reads as depth rather than slide.
+      const lift = 1 + t * 0.30;
 
       curl.style.height = thickness + 'px';
-      // Rotated to lie along the fold, then nudged so the bar's top edge is the
-      // crease and its body lies over the still-unpeeled page.
-      curl.style.transform =
-        `translate(${footX}px, ${footY}px) translate(-50%, -50%) rotate(45deg) translateY(${thickness/2}px)`;
-      curl.style.opacity = String(Math.min(1, t * 6));
+      // Bottom edge of the flap sits exactly on the fold; it extends upward over
+      // the already-revealed area, the way a real flap folds back over itself.
+      curl.style.transform = `translateY(${foldY - thickness}px) scale(${lift.toFixed(3)})`;
+      // Shadow thrown down onto the flat page — grows and softens as it rises.
+      curl.style.boxShadow = `0 ${(10 + 30*t).toFixed(1)}px ${(20 + 46*t).toFixed(1)}px rgba(0,0,0,${(0.34 + 0.22*t).toFixed(3)})`;
+
+      // Bend shading rides just below the fold, on the page still lying flat.
+      const bendH = Math.min(220, 70 + 170 * t);
+      bend.style.height = bendH + 'px';
+      bend.style.transform = `translateY(${foldY}px)`;
+
+      const fade = Math.min(1, t * 8);
+      curl.style.opacity = String(fade);
+      bend.style.opacity = String(fade);
 
       requestAnimationFrame(frame);
     }
