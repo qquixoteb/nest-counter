@@ -1,7 +1,7 @@
 {
-  "name": "Nest Counter - Canaveral National Seashore",
-  "short_name": "Nest Counter",
-  "description": "Live sea turtle nest tally and index-nest tracking for Canaveral National Seashore.",
+  "name": "Field Book - Canaveral National Seashore",
+  "short_name": "Field Book",
+  "description": "Field data collection for Canaveral National Seashore — sea turtle nest surveys, nest inventory, and tiger beetle surveys.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
