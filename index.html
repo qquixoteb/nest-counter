@@ -58,8 +58,8 @@
   .header-actions{ display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
   /* Sync moved down here: in the eyebrow it sat past the nowrap/overflow:hidden
      clip and simply vanished on a phone. */
-  .meta-row{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:2px; }
-  .meta-row .subline{ margin-bottom:0; }
+  .meta-row{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:0 0 16px; }
+  .meta-row .subline{ margin:0; }  /* spacing owned by .meta-row, not the subline */
   .app-name{ font-family: 'Zilla Slab', Georgia, serif; font-weight: 700; letter-spacing: 0.01em; text-transform: none; font-size: 1.18em; }
   .app-name .wm-light{ font-weight: 400; font-style: italic; letter-spacing: 0; opacity: 0.85; }
   .eyebrow-sep{ color: var(--ink-muted); opacity: 0.6; }
@@ -72,7 +72,7 @@
   .title-block h1{
     font-size: clamp(13.5px, 4.6vw, 22px); font-weight:700; margin:0 0 2px; letter-spacing:0.2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    margin-bottom: 6px;   /* room between the survey name and the row below */
+    margin-bottom: 0;     /* meta row sits right under the survey name */
   }
   .title-block .eyebrow{
     font-family:'IBM Plex Mono', monospace; font-size: clamp(7.5px, 2.5vw, 9.5px);
@@ -297,7 +297,6 @@
   }
   #splashTurtle{
     position: absolute; top: 0; left: 0;
-    width: 38px; height: auto;
     filter: drop-shadow(0 2px 5px rgba(0,0,0,0.45));
     /* animation set in JS (initSplashTurtle) once the species is known */
   }
@@ -381,10 +380,8 @@
     94.286%  { transform: translateY(43.1px) rotate(70.1deg); }
     97.143%  { transform: translateY(38.6px) rotate(68.6deg); }
     100%     { transform: translateY(34.0px) rotate(81.2deg); }
-  }  #splashTurtleInner{
-    display: block; width: 100%; height: auto;
-    /* animation set in JS alongside the horizontal one */
   }
+  #splashTurtleInner{ display: block; transform-origin: 50% 50%; }
   @media (prefers-reduced-motion: reduce){
     #splashInner{ animation: none; }
     #splashCurl, #splashBend{ display: none; }
@@ -421,6 +418,7 @@
      .turtle-template elements stay hidden — they only hold the image data for
      each species, cloned per swim. */
   .turtle-template{ display: none; }
+  .turtle-sprite{ background-repeat: no-repeat; image-rendering: pixelated; }
   .turtle-swimmer-instance{
     position: fixed; width: 70px; height: auto; z-index: 45; pointer-events: none;
   }
@@ -792,7 +790,7 @@
 <div id="splashScreen" aria-hidden="true">
   <div id="splashPage">
   <div id="splashWater">
-    <div id="splashTurtle"><img id="splashTurtleInner" src="" alt=""></div>
+    <div id="splashTurtle"><div id="splashTurtleInner" class="turtle-sprite" aria-hidden="true"></div></div>
   </div>
   <div id="splashInner">
     <img id="splashLogo" src="data:image/png;base64,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" alt="">
@@ -826,7 +824,7 @@
 </header>
 <div class="meta-row">
   <div class="subline" id="metaLine">—</div>
-  <span id="agolStatusBar" style="display:none; align-items:center; gap:5px; cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:1px 8px; height:20px;" role="button" aria-label="Sync master species totals">
+  <span id="agolStatusBar" tabindex="0" style="display:none; align-items:center; gap:5px; cursor:pointer; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:1px 8px; height:20px;" role="button" tabindex="0" aria-label="Sync master species totals">
     <span id="agolStatusDot" style="width:6px; height:6px; border-radius:50%; display:inline-block; background:var(--live-red); flex-shrink:0;"></span>
     <span id="agolStatusLabel" style="font-size:10px; color:var(--ink); font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;">sync</span>
     <span id="agolStatusArrow" style="font-weight:700; font-size:12px; color:var(--ink-muted);">–</span>
@@ -840,7 +838,7 @@
 <!-- Survey picker overlay -->
 <div class="overlay" id="surveyPickerOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2>Switch Survey</h2><button class="close-x" id="surveyPickerClose">✕</button></div>
+    <div class="sheet-head"><h2>Switch Survey</h2><button class="close-x" id="surveyPickerClose" aria-label="Close survey picker">✕</button></div>
     <div id="surveyPickerList"></div>
   </div>
 </div>
@@ -867,7 +865,7 @@
   <span id="agolWarningText">⚠ Master species totals haven't synced in over 12 hours — counts on this device may be out of date.</span>
   <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
     <button type="button" class="copy-btn" id="agolWarningSyncBtn" style="padding:5px 9px; font-size:11px;">↓ Sync</button>
-    <button type="button" id="agolWarningDismiss" style="background:none; border:none; color:var(--ink-muted); font-size:17px; line-height:1; cursor:pointer; padding:0 2px;">✕</button>
+    <button type="button" id="agolWarningDismiss" aria-label="Dismiss sync warning" style="background:none; border:none; color:var(--ink-muted); font-size:17px; line-height:1; cursor:pointer; padding:0 2px;">✕</button>
   </div>
 </div>
 
@@ -878,8 +876,8 @@
       <div style="font-size:11.5px; color:var(--ink-muted);">Continuous Tally — saves each tally immediately, grid number tracks live position</div>
       <div class="mono" style="font-size:11.5px; color:var(--gold); font-weight:700; white-space:nowrap; margin-left:8px;" id="ctRunTotal">0 this run</div>
     </div>
-    <div class="field" style="margin-bottom:10px;"><label>Grid number (live)</label>
-      <div class="stepper" style="width:100%;">
+    <div class="field" style="margin-bottom:10px;"><label id="ctGridLbl">Grid number (live)</label>
+      <div class="stepper" style="width:100%;" role="group" aria-labelledby="ctGridLbl">
         <button type="button" class="step-btn" id="ctGridMinus">−</button>
         <input type="number" id="ctGridNumber" inputmode="numeric" style="flex:1; text-align:center; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:11px 8px; font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;">
         <button type="button" class="step-btn" id="ctGridPlus">+</button>
@@ -963,24 +961,24 @@
 <div id="tigerBeetleModeContent" style="display:none;">
   <div class="daily-totals" style="text-align:left;" id="beetleActiveBox">
     <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:6px;" id="beetleStatusText">No transect in progress</div>
-    <div class="field" style="margin-bottom:8px;"><label>Grid number</label>
-      <div class="stepper" style="width:100%;">
+    <div class="field" style="margin-bottom:8px;"><label id="beetleGridLbl">Grid number</label>
+      <div class="stepper" style="width:100%;" role="group" aria-labelledby="beetleGridLbl">
         <button type="button" class="step-btn" id="beetleGridMinus">−</button>
         <input type="number" id="beetleGridNumber" inputmode="numeric" style="flex:1; text-align:center; background:var(--surface); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:11px 8px; font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600;">
         <button type="button" class="step-btn" id="beetleGridPlus">+</button>
       </div>
     </div>
-    <div class="field" style="margin-bottom:8px;"><label>Direction</label>
+    <div class="field" style="margin-bottom:8px;"><label for="beetleDirection">Direction</label>
       <select id="beetleDirection"><option value="S">S</option><option value="N">N</option></select>
     </div>
     <button type="button" class="btn btn-primary" id="beetleStartBtn" style="width:100%;">▶ Start Transect</button>
     <div id="beetleActiveTally" style="display:none;">
       <div class="beetle-tally-fields" style="margin-top:14px;">
-        <div class="beetle-tally-field"><label>Individuals</label>
-          <div class="beetle-stepper"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetleIndivValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
+        <div class="beetle-tally-field"><label id="beetleIndivLbl">Individuals</label>
+          <div class="beetle-stepper" role="group" aria-labelledby="beetleIndivLbl"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetleIndivValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
         </div>
-        <div class="beetle-tally-field"><label>Copulating Pairs</label>
-          <div class="beetle-stepper"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetlePairsValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
+        <div class="beetle-tally-field"><label id="beetlePairsLbl">Copulating Pairs</label>
+          <div class="beetle-stepper" role="group" aria-labelledby="beetlePairsLbl"><button type="button" class="beetle-step-btn" data-step="-1">−</button><div class="beetle-step-value" id="beetlePairsValue">0</div><button type="button" class="beetle-step-btn" data-step="1">+</button></div>
         </div>
       </div>
       <button type="button" class="btn btn-primary" id="beetleEndBtn" style="width:100%; margin-top:14px;">■ End Transect</button>
@@ -1000,7 +998,7 @@
 <!-- Grid Tally modal -->
 <div class="overlay" id="gridTallyOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2>Add Grid Tally</h2><button class="close-x" id="gridTallyClose">✕</button></div>
+    <div class="sheet-head"><h2>Add Grid Tally</h2><button class="close-x" id="gridTallyClose" aria-label="Close grid tally">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
       <div class="hint-text-tight" id="gridMapStatusGridTally">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -1028,7 +1026,7 @@
 <!-- Capture modal (index nests) -->
 <div class="overlay" id="captureOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2 id="captureTitle">Index Nest</h2><button class="close-x" id="captureClose">✕</button></div>
+    <div class="sheet-head"><h2 id="captureTitle">Index Nest</h2><button class="close-x" id="captureClose" aria-label="Close index nest form">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
       <div class="hint-text-tight" id="gridMapStatusCapture">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -1041,27 +1039,27 @@
       <div class="flag-txt" id="captureFlagText">Index nest — capture location before you move on.</div>
     </div>
     <div class="field" id="manualSpeciesWrap" style="display:none;">
-      <label>Species</label>
+      <label for="manualCaptureSpecies">Species</label>
       <select id="manualCaptureSpecies"></select>
     </div>
     <div class="field" id="manualOtherNameWrap" style="display:none;">
-      <label>Species name</label>
+      <label for="manualCaptureOtherName">Species name</label>
       <input type="text" id="manualCaptureOtherName" placeholder="e.g. Hawksbill">
     </div>
     <div class="field" id="manualNestNumWrap" style="display:none;">
-      <label>Nest number</label>
+      <label for="manualCaptureNestNum">Nest number</label>
       <input type="text" id="manualCaptureNestNum" placeholder="e.g. 47, or leave blank if unknown">
     </div>
     <div class="queue-note" id="queueNote" style="display:none;"></div>
-    <div class="field"><label>Grid number</label><input type="number" id="gridInput" inputmode="numeric"></div>
+    <div class="field"><label for="gridInput">Grid number</label><input type="number" id="gridInput" inputmode="numeric"></div>
     <button type="button" class="btn btn-secondary" id="gpsCaptureBtn" style="width:100%; margin-bottom:8px;">📍 Capture GPS Point</button>
     <div class="gps-status" id="gpsStatus">Not yet captured — walk to the nest, then tap the button above</div>
     <div class="coord-row">
-      <div class="field"><label>Latitude</label><input type="text" id="latInput" inputmode="decimal" placeholder="—"></div>
-      <div class="field"><label>Longitude</label><input type="text" id="lonInput" inputmode="decimal" placeholder="—"></div>
+      <div class="field"><label for="latInput">Latitude</label><input type="text" id="latInput" inputmode="decimal" placeholder="—"></div>
+      <div class="field"><label for="lonInput">Longitude</label><input type="text" id="lonInput" inputmode="decimal" placeholder="—"></div>
     </div>
     <div class="field">
-      <label>Sighting code</label>
+      <label for="sightingCodeInput">Sighting code</label>
       <select id="sightingCodeInput">
         <option value="">Select…</option>
         <option value="D">D — Not depredated</option>
@@ -1074,11 +1072,11 @@
       <input type="checkbox" id="belowTideInput" style="width:20px; height:20px;">
     </div>
     <div class="field">
-      <label>Disturbance code</label>
+      <label for="captureDisturbance">Disturbance code</label>
       <select id="captureDisturbance"></select>
     </div>
     <div class="field" id="captureDisturbanceOtherWrap" style="display:none;">
-      <label>Specify disturbance</label>
+      <label for="captureDisturbanceOther">Specify disturbance</label>
       <input type="text" id="captureDisturbanceOther" placeholder="e.g. Vehicle track">
     </div>
     <div class="field" style="display:flex; gap:10px;">
@@ -1095,7 +1093,7 @@
         <select id="captureRelocated"><option value="N">N</option><option value="Y">Y</option></select>
       </div>
     </div>
-    <div class="field"><label>Notes</label><textarea id="notesInput"></textarea></div>
+    <div class="field"><label for="notesInput">Notes</label><textarea id="notesInput"></textarea></div>
     <div class="sheet-actions">
       <button class="btn btn-secondary" id="captureCancel">Skip</button>
       <button class="btn btn-primary" id="captureSave">Save index nest</button>
@@ -1106,7 +1104,7 @@
 <!-- Subsequent Sighting modal -->
 <div class="overlay" id="subsequentOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2 id="subsequentTitle">Subsequent Sighting</h2><button class="close-x" id="subsequentClose">✕</button></div>
+    <div class="sheet-head"><h2 id="subsequentTitle">Subsequent Sighting</h2><button class="close-x" id="subsequentClose" aria-label="Close subsequent sighting form">✕</button></div>
     <div class="grid-live-box" style="border:1px solid var(--live-red); border-radius:12px; padding:10px 12px; margin-bottom:14px;">
       <div class="hint-text-tight" id="gridMapStatusSubsequent">—</div>
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -1116,17 +1114,17 @@
     </div>
     <div class="queue-note" id="subQueueNote" style="display:none;"></div>
     <div class="field">
-      <label>Species</label>
+      <label for="subSpecies">Species</label>
       <select id="subSpecies"></select>
     </div>
     <div class="field" id="subOtherNameWrap" style="display:none;">
-      <label>Species name</label>
+      <label for="subOtherName">Species name</label>
       <input type="text" id="subOtherName" placeholder="e.g. Hawksbill">
     </div>
-    <div class="field"><label>Nest number</label><input type="text" id="subNestNumber" placeholder="e.g. 47, or Unknown"></div>
-    <div class="field"><label>Grid</label><input type="number" id="subGrid" inputmode="numeric" placeholder="e.g. 14"></div>
+    <div class="field"><label for="subNestNumber">Nest number</label><input type="text" id="subNestNumber" placeholder="e.g. 47, or Unknown"></div>
+    <div class="field"><label for="subGrid">Grid</label><input type="number" id="subGrid" inputmode="numeric" placeholder="e.g. 14"></div>
     <div class="field">
-      <label>Sighting code</label>
+      <label for="subSightingCode">Sighting code</label>
       <select id="subSightingCode">
         <option value="">Select…</option>
         <optgroup label="Subsequent check">
@@ -1144,22 +1142,22 @@
       </select>
     </div>
     <div class="field">
-      <label>Disturbance code</label>
+      <label for="subDisturbanceCode">Disturbance code</label>
       <select id="subDisturbanceCode"></select>
     </div>
     <div class="field" id="subDisturbanceOtherWrap" style="display:none;">
-      <label>Specify disturbance</label>
+      <label for="subDisturbanceOther">Specify disturbance</label>
       <input type="text" id="subDisturbanceOther" placeholder="e.g. Vehicle track">
     </div>
     <div class="field">
-      <label>Secondary disturbance code (optional)</label>
+      <label for="subDisturbanceCode2">Secondary disturbance code (optional)</label>
       <select id="subDisturbanceCode2"></select>
     </div>
     <div class="field" id="subDisturbanceOther2Wrap" style="display:none;">
-      <label>Specify secondary disturbance</label>
+      <label for="subDisturbanceOther2">Specify secondary disturbance</label>
       <input type="text" id="subDisturbanceOther2" placeholder="e.g. Vehicle track">
     </div>
-    <div class="field"><label>Notes</label><textarea id="subNotes"></textarea></div>
+    <div class="field"><label for="subNotes">Notes</label><textarea id="subNotes"></textarea></div>
     <div class="sheet-actions">
       <button class="btn btn-secondary" id="subCancel">Cancel</button>
       <button class="btn btn-primary" id="subSave">Save sighting</button>
@@ -1170,28 +1168,28 @@
 <!-- Nest Inventory modal -->
 <div class="overlay" id="nestInventoryOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2 id="nestInventoryTitle">Add Nest Inventory</h2><button class="close-x" id="nestInventoryClose">✕</button></div>
-    <div class="field"><label>Grid</label><input type="text" id="niGrid" placeholder="e.g. 14"></div>
-    <div class="field"><label>Species</label>
+    <div class="sheet-head"><h2 id="nestInventoryTitle">Add Nest Inventory</h2><button class="close-x" id="nestInventoryClose" aria-label="Close nest inventory form">✕</button></div>
+    <div class="field"><label for="niGrid">Grid</label><input type="text" id="niGrid" placeholder="e.g. 14"></div>
+    <div class="field"><label for="niSpecies">Species</label>
       <select id="niSpecies"></select>
     </div>
-    <div class="field" id="niOtherNameWrap" style="display:none;"><label>Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
-    <div class="field"><label>Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
-    <div class="field"><label>Date</label><input type="date" id="niDate"></div>
+    <div class="field" id="niOtherNameWrap" style="display:none;"><label for="niOtherName">Species name</label><input type="text" id="niOtherName" placeholder="e.g. Hawksbill"></div>
+    <div class="field"><label for="niNestNumber">Nest #</label><input type="text" id="niNestNumber" placeholder="e.g. 47"></div>
+    <div class="field"><label for="niDate">Date</label><input type="date" id="niDate"></div>
     <button type="button" class="btn btn-secondary" id="niGpsCaptureBtn" style="width:100%; margin-bottom:8px;">📍 Capture GPS Point</button>
     <div class="coord-row">
-      <div class="field"><label>Latitude</label><input type="text" id="niLat" inputmode="decimal" placeholder="—"></div>
-      <div class="field"><label>Longitude</label><input type="text" id="niLon" inputmode="decimal" placeholder="—"></div>
+      <div class="field"><label for="niLat">Latitude</label><input type="text" id="niLat" inputmode="decimal" placeholder="—"></div>
+      <div class="field"><label for="niLon">Longitude</label><input type="text" id="niLon" inputmode="decimal" placeholder="—"></div>
     </div>
-    <div class="field"><label>Hatchling Live</label><input type="number" id="niHatchLive" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Hatchling Dead</label><input type="number" id="niHatchDead" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Empty Shells</label><input type="number" id="niEmptyShells" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Pipped Dead</label><input type="number" id="niPippedDead" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Pipped Live</label><input type="number" id="niPippedLive" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Whole Eggs</label><input type="number" id="niWholeEggs" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Number Physically Damaged</label><input type="number" id="niDamaged" inputmode="numeric" min="0" value="0"></div>
-    <div class="field"><label>Total Clutch</label><div class="mono" id="niTotalClutch" style="font-size:20px; font-weight:700; padding:6px 0; color:var(--gold);">0</div></div>
-    <div class="field"><label>Comment</label><textarea id="niComment"></textarea></div>
+    <div class="field"><label for="niHatchLive">Hatchling Live</label><input type="number" id="niHatchLive" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niHatchDead">Hatchling Dead</label><input type="number" id="niHatchDead" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niEmptyShells">Empty Shells</label><input type="number" id="niEmptyShells" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niPippedDead">Pipped Dead</label><input type="number" id="niPippedDead" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niPippedLive">Pipped Live</label><input type="number" id="niPippedLive" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niWholeEggs">Whole Eggs</label><input type="number" id="niWholeEggs" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label for="niDamaged">Number Physically Damaged</label><input type="number" id="niDamaged" inputmode="numeric" min="0" value="0"></div>
+    <div class="field"><label id="niTotalClutchLbl">Total Clutch</label><div class="mono" role="status" aria-labelledby="niTotalClutchLbl" id="niTotalClutch" style="font-size:20px; font-weight:700; padding:6px 0; color:var(--gold);">0</div></div>
+    <div class="field"><label for="niComment">Comment</label><textarea id="niComment"></textarea></div>
     <div class="sheet-actions">
       <button class="btn btn-secondary" id="niCancel">Cancel</button>
       <button class="btn btn-primary" id="niSave">Save</button>
@@ -1203,26 +1201,26 @@
 <!-- Settings overlay -->
 <div class="overlay" id="settingsOverlay">
   <div class="sheet">
-    <div class="sheet-head"><h2>Settings</h2><button class="close-x" id="settingsClose">✕</button></div>
+    <div class="sheet-head"><h2>Settings</h2><button class="close-x" id="settingsClose" aria-label="Close settings">✕</button></div>
     <div class="settings-group">
       <h3>Survey info</h3>
-      <div class="field"><label>Observer</label><select id="editObserver"></select></div>
+      <div class="field"><label for="editObserver">Observer</label><select id="editObserver"></select></div>
       <div id="observerManageList" class="observer-manage-list"></div>
-      <div class="field"><label>Date</label><input type="date" id="editDate"></div>
-      <div class="field"><label>District</label>
+      <div class="field"><label for="editDate">Date</label><input type="date" id="editDate"></div>
+      <div class="field"><label for="editDistrict">District</label>
         <select id="editDistrict"><option value="apollo">Apollo</option><option value="playalinda">Playalinda</option></select>
       </div>
-      <div class="field"><label>Full beach run</label>
+      <div class="field"><label for="editFullBeachRun">Full beach run</label>
         <select id="editFullBeachRun"><option value="off">Off (default)</option><option value="on">On</option></select>
         <div style="font-size:11px; color:var(--ink-muted); margin-top:4px;">Turtle grid tally only — Tiger Beetle always runs the full beach. Off (usual case): Add Grid Tally's suggested next number stops at your district's boundary (Apollo 44, Playalinda 45). On: keeps suggesting past it, for the days you're covering the whole beach in one session.</div>
       </div>
-      <div class="field"><label>Run time</label>
+      <div class="field"><label for="editRunTime">Run time</label>
         <select id="editRunTime"><option value="Day">Day</option><option value="Night">Night</option></select>
       </div>
-      <div class="field"><label>Notes for today</label>
+      <div class="field"><label for="editDailyComment">Notes for today</label>
         <textarea id="editDailyComment"></textarea>
       </div>
-      <div class="field"><label>Color scheme</label>
+      <div class="field"><label for="editLightMode">Color scheme</label>
         <select id="editLightMode"><option value="light">Light</option><option value="dark">Dark</option></select>
       </div>
     </div>
@@ -1254,39 +1252,39 @@
       <div class="settings-group" style="margin-top:14px;">
         <h3>Grid map</h3>
         <div class="hint-text">When on, opening Add Grid Tally auto-fills the grid you were previously in (based on live GPS), and Subsequent Sighting auto-fills the grid you're currently in. Requires grid tracking (below) to be running. Off by default — always double-check before saving.</div>
-        <div class="field"><label>Auto-fill grid from GPS</label>
+        <div class="field"><label for="editGridAutoFill">Auto-fill grid from GPS</label>
           <select id="editGridAutoFill"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Alerts you when live grid tracking confirms you've moved into a new grid — useful without needing to look at the screen. Vibrate needs a recent tap on the screen to work at all (a browser restriction, not something this app controls) — Notify doesn't have that limitation, so it's the more reliable option if you're not actively touching the screen while walking. Requires grid tracking to be running either way.</div>
-        <div class="field"><label>Alert on grid change</label>
+        <div class="field"><label for="editGridChangeAlert">Alert on grid change</label>
           <select id="editGridChangeAlert"><option value="off">Off (default)</option><option value="vibrate">Vibrate</option><option value="notify">Notify</option><option value="both">Both</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Replaces the "+ Add Grid Tally" button with a persistent tally panel at the top of the page. Each tally saves immediately as you tap it — nothing is held back and lost if the app closes. Index nest thresholds (and predations) are checked immediately too, so a capture prompt can appear right on the tap that triggers it. The grid number tracks live GPS position; a manual correction sticks for a while (see below) before returning to live tracking. Requires grid tracking to be running.</div>
-        <div class="field"><label>Continuous tally mode</label>
+        <div class="field"><label for="editContinuousTallyMode">Continuous tally mode</label>
           <select id="editContinuousTallyMode"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
-        <div class="field"><label>Manual grid edit sticks for</label>
+        <div class="field"><label for="editCtStickyMinutes">Manual grid edit sticks for</label>
           <select id="editCtStickyMinutes"><option value="0.5">30 seconds</option><option value="1">1 minute (default)</option><option value="2">2 minutes</option><option value="3">3 minutes</option><option value="5">5 minutes</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Makes the tally steppers, labels, and grid number field bigger on the Add Grid Tally form. Only takes effect on a large tablet screen — never shrinks or crowds things on a phone.</div>
-        <div class="field"><label>Big button mode</label>
+        <div class="field"><label for="editBigButtonMode">Big button mode</label>
           <select id="editBigButtonMode"><option value="off">Off (default)</option><option value="on">On</option></select>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin:12px 0 10px;">Occasionally a sea turtle swims across the screen when you tap things. Purely decorative.</div>
-        <div class="field"><label>Turtles</label>
+        <div class="field"><label for="editTurtlesEnabled">Turtles</label>
           <select id="editTurtlesEnabled"><option value="on">On (default)</option><option value="off">Off</option></select>
         </div>
       </div>
       <div class="settings-group section-spaced">
         <h3>Master species totals</h3>
         <div class="hint-text">Syncs Loggerhead/Green/Leatherback/Kemp's running counts directly with the OneDrive master file, via two Power Automate flows — one reads, one writes. Staff editing that file directly (paper data entry) are automatically reflected the next time this app reads, since there's only one copy of the data, not a separate synced copy. Only Export writes to the master — Sync Now and the tappable sync indicator at the top only ever read. Clearing the day never syncs at all. This only ever warns if the connection is stale or unreachable — it never blocks tallying.</div>
-        <div class="field"><label>Sync with master species totals</label>
+        <div class="field"><label for="editAgolEnabled">Sync with master species totals</label>
           <select id="editAgolEnabled"><option value="on">On (default)</option><option value="off">Off</option></select>
         </div>
-        <div class="field"><label>Read flow URL</label><input type="url" id="editAgolUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
-        <div class="field"><label>Write flow URL</label><input type="url" id="editAgolWriteUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
-        <div class="field"><label>Warn as stale after (days)</label><input type="number" id="editStaleThresholdDays" min="1" step="1"></div>
-        <div class="field"><label>Warn on write if count jumps by more than</label><input type="number" id="editWildDiffThreshold" min="1" step="1"></div>
+        <div class="field"><label for="editAgolUrl">Read flow URL</label><input type="url" id="editAgolUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
+        <div class="field"><label for="editAgolWriteUrl">Write flow URL</label><input type="url" id="editAgolWriteUrl" placeholder="https://prod-....logic.azure.com/.../triggers/manual/paths/invoke?..."></div>
+        <div class="field"><label for="editStaleThresholdDays">Warn as stale after (days)</label><input type="number" id="editStaleThresholdDays" min="1" step="1"></div>
+        <div class="field"><label for="editWildDiffThreshold">Warn on write if count jumps by more than</label><input type="number" id="editWildDiffThreshold" min="1" step="1"></div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
           <button type="button" class="copy-btn" id="agolSettingsSyncBtn">↓ Down (read)</button>
           <button type="button" class="copy-btn" id="agolSettingsWriteBtn">↑ Up (write)</button>
@@ -1308,7 +1306,7 @@
           </div>
         </div>
         <div style="font-size:11.5px; color:var(--ink-muted); margin-bottom:8px;">Updating one post in the field — select it (or add a new one), stand at it, and capture its GPS point directly. No file needed.</div>
-        <div class="field"><label>Grid post</label>
+        <div class="field"><label for="editGridPointSelect">Grid post</label>
           <select id="editGridPointSelect"></select>
         </div>
         <button class="reset-btn" id="captureGridPointBtn" style="border-color:var(--live-red); color:var(--live-red); margin-bottom:14px;">📍 Capture Point for This Grid</button>
@@ -2463,6 +2461,222 @@
     {id:'turtleSwimmerLeatherback', weight:10, cls:'turtle-leatherback'},
   ];
 
+  // Per-species sprite sheets. A looping GIF forces a flipper beat every cycle,
+  // which is exactly why the turtles never appeared to glide — they were always
+  // mid-stroke. Driving frames ourselves lets a stroke play once and then HOLD a
+  // swept-back glide pose while the turtle coasts.
+  const TURTLE_SPRITES = {
+    turtleSwimmerGreen: {frames:4, glide:3, w:78, h:71, src:'data:image/png;base64,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'},
+    turtleSwimmerLoggerhead: {frames:4, glide:3, w:78, h:72, src:'data:image/png;base64,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'},
+    turtleSwimmerLeatherback: {frames:4, glide:2, w:100, h:86, src:'data:image/png;base64,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'},
+  };
+
+  // Displayed a touch smaller than native sprite size.
+  const TURTLE_SCALE = 0.72;
+  // Per-species frame timing (fractions of one stroke, cumulative) and the frame
+  // the POWER STROKE starts on. Green's source frames had uneven durations
+  // (110/70/70/120/150/150ms) — stepping them evenly is what caused its stutter.
+  // The leatherback's frames are unevenly spaced visually (big jumps 1→2→3, small
+  // 3→0), so its similar-looking frames are held longer and the jumpy ones
+  // shorter to soften it; that's a source-frame limitation, not fully fixable.
+  // Timing derived by measuring how much each frame actually changes, so an
+  // uneven source cycle still reads at a constant rate. Green's sheet previously
+  // carried 6 frames, but 4 and 5 were pixel-duplicates of 2 and 1 — ping-pong
+  // padding in the source GIF. Stepping one-way through that played the stroke
+  // forwards then backwards, which was the stutter; it now uses the 4 unique
+  // frames only.
+  TURTLE_SPRITES.turtleSwimmerGreen.timing       = [0.2743, 0.5335, 0.729, 1.0];
+  // strokeStart = glide + 1 so the cycle FINISHES on the glide pose. Otherwise
+  // the last stroke frame jumps to an unrelated glide frame and back again every
+  // cycle, which is the flutter.
+  TURTLE_SPRITES.turtleSwimmerGreen.strokeStart  = (TURTLE_SPRITES.turtleSwimmerGreen.glide + 1) % TURTLE_SPRITES.turtleSwimmerGreen.frames;
+  TURTLE_SPRITES.turtleSwimmerLoggerhead.timing  = [0.2952, 0.6404, 0.8142, 1.0];
+  TURTLE_SPRITES.turtleSwimmerLoggerhead.strokeStart = (TURTLE_SPRITES.turtleSwimmerLoggerhead.glide + 1) % TURTLE_SPRITES.turtleSwimmerLoggerhead.frames;
+  TURTLE_SPRITES.turtleSwimmerLeatherback.timing = [0.2183, 0.4203, 0.7402, 1.0];
+  TURTLE_SPRITES.turtleSwimmerLeatherback.strokeStart = (TURTLE_SPRITES.turtleSwimmerLeatherback.glide + 1) % TURTLE_SPRITES.turtleSwimmerLeatherback.frames;
+  // Which frames are the POWER (back) stroke — flippers sweeping from fully
+  // extended to swept back. Only these move water; the rest is recovery, and
+  // pushing during recovery is what made the surge land on the wrong frame.
+  TURTLE_SPRITES.turtleSwimmerGreen.power       = [1, 2];
+  TURTLE_SPRITES.turtleSwimmerLoggerhead.power  = [0, 1, 2];
+  TURTLE_SPRITES.turtleSwimmerLeatherback.power = [0, 1];
+
+  // Named swim behaviours, shared by the title-screen turtle and every
+  // swim-across turtle so they all move the same believable way.
+  const TURTLE_SCENARIOS = [
+    {id:'cruise',  weight:24, strokes:[13,19], amp:[8,16],  cycles:[0.8,1.6], drift:0.25, driftMs:[700,1400],  wait:[600,2200], depth:'any'},
+    {id:'meander', weight:18, strokes:[14,20], amp:[20,34], cycles:[1.8,3.0], drift:0.85, driftMs:[1300,2600], wait:[700,2400], depth:'any'},
+    {id:'bask',    weight:12, strokes:[10,14], amp:[4,9],   cycles:[0.4,0.9], drift:1.0,  driftMs:[2600,4200], wait:[900,2600], depth:'high'},
+    {id:'dart',    weight:12, strokes:[8,11],  amp:[3,7],   cycles:[0.5,1.0], drift:0.0,  driftMs:[0,0],       wait:[500,1600], depth:'any'},
+    {id:'dive',    weight:17, strokes:[12,17], amp:[5,10],  cycles:[0.5,0.9], drift:0.2,  driftMs:[600,1200],  wait:[600,2000], depth:'descend'},
+    {id:'surface', weight:17, strokes:[12,17], amp:[5,10],  cycles:[0.5,0.9], drift:0.3,  driftMs:[700,1500],  wait:[600,2000], depth:'ascend'},
+  ];
+  const tRand = (a,b) => a + Math.random()*(b-a);
+  const tRandInt = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  function pickTurtleScenario(forceId){
+    if(forceId){ const f = TURTLE_SCENARIOS.find(s=>s.id===forceId); if(f) return f; }
+    const total = TURTLE_SCENARIOS.reduce((s,x)=>s+x.weight,0);
+    let r = Math.random()*total;
+    for(const s of TURTLE_SCENARIOS){ r -= s.weight; if(r<=0) return s; }
+    return TURTLE_SCENARIOS[0];
+  }
+
+  // ---- swim physics ----------------------------------------------------
+  // Velocity model, not a per-stroke distance model. The old version computed
+  // each stroke's distance independently, so the turtle always sank back toward
+  // zero between strokes and could never build up. Here a stroke adds impulse
+  // during the back-sweep, drag bleeds off a little, and speed ACCUMULATES to a
+  // cruise it then maintains — and can shed deliberately when it goes to chill.
+  const TURTLE_PHYS = {
+    vMax: 155,         // px/sec cruising
+    dragPerSec: 0.10,  // gentle: water, not glue
+    gainPerStroke: 0.22, // fraction of vMax a stroke restores AT cruise
+    accelBoost: 3.6,   // extra effort when well below cruise (0 at cruise)
+    chillDrag: 0.55,   // slows noticeably when it stops stroking to loaf
+  };
+
+  // Which sheet frame at fraction f through a stroke, honouring the per-frame
+  // timing table and the rotation that puts the power stroke first.
+  function turtleFrameFromCycle(sprite, f){
+    const t = sprite.timing;
+    let k = 0;
+    if(t){ while(k < t.length - 1 && f >= t[k]) k++; }
+    else { k = Math.floor(f * sprite.frames); }
+    return (k + (sprite.strokeStart || 0)) % sprite.frames;
+  }
+
+  // Share of a stroke spent in the power phase — used to spread the impulse
+  // across exactly those frames.
+  function turtlePowerShare(sprite){
+    const t = sprite.timing || [];
+    const pw = sprite.power || [];
+    let share = 0;
+    for(let k=0; k<sprite.frames; k++){
+      const lo = k === 0 ? 0 : t[k-1];
+      const hi = t[k];
+      const sheetFrame = (k + (sprite.strokeStart || 0)) % sprite.frames;
+      if(pw.includes(sheetFrame)) share += (hi - lo);
+    }
+    return share > 0 ? share : 0.5;
+  }
+
+  function createTurtleSwim({isFirst=false, W, playH, forceScenario=null}={}){
+    const picked = pickTurtleTemplate();
+    if(!picked || !picked.el) return null;
+    const sprite = TURTLE_SPRITES[picked.el.id];
+    if(!sprite) return null;
+    const strokeMs = TURTLE_STROKE_MS[picked.el.id] || 700;
+    const sc = isFirst ? TURTLE_SCENARIOS[0] : pickTurtleScenario(forceScenario);
+
+    const goingRight = isFirst ? true : Math.random() < 0.5;
+    const startX = goingRight ? -95 : W + 95;
+    const exitX  = goingRight ? W + 95 : -95;
+
+    let yStart, yEnd;
+    if(sc.depth === 'descend'){ yStart = tRand(0, playH*0.18); yEnd = tRand(playH*0.78, playH); }
+    else if(sc.depth === 'ascend'){ yStart = tRand(playH*0.78, playH); yEnd = tRand(0, playH*0.18); }
+    else if(sc.depth === 'high'){ yStart = tRand(0, playH*0.4); yEnd = tRand(0, playH*0.4); }
+    else { yStart = Math.random()*playH; yEnd = Math.random()*playH; }
+
+    // Glide between strokes. Longer glide = more distance carried per stroke.
+    const glideMs = strokeMs * tRand(2.0, 3.0);   // strokes far less often; each one carries much further
+    const cycleMs = strokeMs + glideMs;
+    const vMax = TURTLE_PHYS.vMax * tRand(0.82, 1.18) * (sc.id === 'dart' ? 1.3 : sc.id === 'bask' ? 0.7 : 1);
+
+    // Impulse sized so that, at cruise, one stroke exactly replaces what drag
+    // took over a full stroke+glide cycle — that's what makes speed hold steady
+    // instead of creeping up or bleeding away.
+    const powerShare = turtlePowerShare(sprite);
+    const powerMs = strokeMs * powerShare;
+    const deltaV = vMax * TURTLE_PHYS.gainPerStroke;
+
+    // Does it stop to loaf partway across?
+    const willChill = !isFirst && Math.random() < sc.drift;
+    const chillStart = willChill ? tRand(cycleMs*2, cycleMs*4) : -1;
+    const chillMs = willChill ? tRand(sc.driftMs[0], sc.driftMs[1]) : 0;
+
+    return {
+      scenario: sc.id, picked, sprite, W, playH, goingRight,
+      x: startX, startX, exitX, v: 0,
+      t: 0, cyclePos: 0, strokeMs, cycleMs,
+      impulsePerMs: deltaV / powerMs,
+      vMax, dragPerSec: TURTLE_PHYS.dragPerSec,
+      chillStart, chillMs,
+      yStart, yEnd,
+      amp: tRand(sc.amp[0], sc.amp[1]),
+      cycles: tRand(sc.cycles[0], sc.cycles[1]),
+      fadeMs: 1500,
+      depthCycles: tRand(0.6, 1.5),
+      depthPhase: Math.random() * Math.PI * 2,
+      depthMin: tRand(0.30, 0.55),
+      waitMs: isFirst ? 500 : tRand(sc.wait[0], sc.wait[1]),
+    };
+  }
+
+  // Advances the simulation by dt ms. Returns a pose, or null once it's gone.
+  function stepTurtleSwim(L, dt){
+    dt = Math.max(0, Math.min(64, dt));   // clamp so a stalled tab can't teleport it
+    L.t += dt;
+
+    const chilling = L.chillMs > 0 && L.t >= L.chillStart && L.t < L.chillStart + L.chillMs;
+    let frame;
+    if(chilling){
+      frame = L.sprite.glide;                       // holds the glide pose, no push
+      L.v *= Math.exp(-TURTLE_PHYS.chillDrag * dt/1000);
+    } else {
+      L.cyclePos = (L.cyclePos + dt) % L.cycleMs;
+      if(L.cyclePos < L.strokeMs){
+        const f = L.cyclePos / L.strokeMs;
+        frame = turtleFrameFromCycle(L.sprite, f);
+        // Thrust ONLY while the flippers are sweeping rearward.
+        if(L.sprite.power && L.sprite.power.includes(frame)){
+          // Harder push while slow, easing off near cruise — the way anything
+          // actually gets up to speed. Keeping drag low enough for a long glide
+          // means a fixed impulse would take ~20s to reach cruise; this gets
+          // there in a few strokes without touching the equilibrium speed, since
+          // the bonus vanishes as v approaches vMax.
+          const effort = 1 + TURTLE_PHYS.accelBoost * Math.max(0, 1 - L.v / L.vMax);
+          L.v += L.impulsePerMs * effort * dt;
+        }
+      } else {
+        frame = L.sprite.glide;                     // coasting, flippers held back
+      }
+      L.v *= Math.exp(-L.dragPerSec * dt/1000);
+    }
+    if(L.v > L.vMax) L.v = L.vMax;
+
+    L.x += (L.goingRight ? 1 : -1) * L.v * dt/1000;
+
+    const span = L.exitX - L.startX;
+    const prog = Math.max(0, Math.min(1, (L.x - L.startX) / span));
+    if(prog >= 1) return null;
+
+    const y = L.yStart + (L.yEnd - L.yStart)*prog + Math.sin(2*Math.PI*L.cycles*prog) * L.amp;
+    const dyDp = (L.yEnd - L.yStart) + L.amp*2*Math.PI*L.cycles*Math.cos(2*Math.PI*L.cycles*prog);
+    // span is ALREADY signed (negative when travelling left). Multiplying by
+    // another -1 made dx positive for a left-bound turtle, so it faced right
+    // while moving left — it looked like it was swimming backwards.
+    const angle = Math.atan2(dyDp, span) * (180/Math.PI) + 90;
+
+    // Depth: the turtle drifts nearer and further from the viewer across the
+    // crossing, so it fades and shrinks mid-screen rather than only at the
+    // edges. That's what gives the screen a sense of depth instead of a flat
+    // plane with turtles sliding over it.
+    const depth = 0.5 + 0.5*Math.sin(2*Math.PI*L.depthCycles*prog + L.depthPhase);
+    const near = L.depthMin + (1 - L.depthMin) * depth;   // 0 = far away, 1 = close
+
+    const fadeIn = Math.min(1, L.t / L.fadeMs);
+    const fadeOut = prog > 0.86 ? Math.max(0, (1 - prog) / 0.14) : 1;
+    const edge = Math.max(0, Math.min(fadeIn, fadeOut));
+    const opacity = edge * (0.30 + 0.70 * near);
+    const scale = 0.70 + 0.40 * near;
+    const blur = (1 - near) * 2.8 + (1 - edge) * 4;
+
+    return {x: L.x, y, angle, opacity, frame, v: L.v, scale, blur};
+  }
+
+
+
   function pickTurtleTemplate(){
     const total = TURTLE_SPAWN_WEIGHTS.reduce((sum,t) => sum + t.weight, 0);
     let roll = Math.random() * total;
@@ -2515,59 +2729,52 @@
     }, 5500); // matches the 5.5s rolloverFade — animation plays, then the new page holds readable before fading
   }
 
+  // Builds a sprite-backed turtle element. background-position selects the frame.
+  function makeSpriteTurtle(sprite, extraClass){
+    const el = document.createElement('div');
+    el.className = 'turtle-sprite' + (extraClass ? ' ' + extraClass : '');
+    el.setAttribute('aria-hidden', 'true');
+    el.style.backgroundImage = `url(${sprite.src})`;
+    el.style.backgroundSize = `${sprite.frames * 100}% 100%`;
+    el.style.width = (sprite.w * TURTLE_SCALE) + 'px';
+    el.style.height = (sprite.h * TURTLE_SCALE) + 'px';
+    return el;
+  }
+  function setSpriteFrame(el, sprite, idx){
+    el.style.backgroundPosition = `${(idx / (sprite.frames - 1)) * 100}% 0`;
+  }
+
   function swimTurtleAcross(){
     if(state?.meta?.turtlesEnabled === false) return;
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if(reduceMotion) return;
-    const picked = pickTurtleTemplate();
-    if(!picked || !picked.el) return;
-    const template = picked.el;
 
-    const turtle = document.createElement('img');
-    turtle.src = template.src;
-    turtle.alt = '';
-    turtle.setAttribute('aria-hidden', 'true');
-    turtle.className = 'turtle-swimmer-instance' + (picked.cls ? ' ' + picked.cls : '');
+    const leg = createTurtleSwim({ W: window.innerWidth, playH: window.innerHeight * 0.62 });
+    if(!leg) return;
+
+    const turtle = makeSpriteTurtle(leg.sprite, 'turtle-swimmer-instance' + (leg.picked.cls ? ' ' + leg.picked.cls : ''));
     document.body.appendChild(turtle);
 
-    const goingRight = Math.random() < 0.5;
-    const startYVh = 15 + Math.random() * 60;
-    const endYVh = 15 + Math.random() * 60;
-    const wobbleAmpVh = 3 + Math.random() * 7;
-    const wobbleFreq = 1 + Math.random() * 2; // full wobble cycles across the whole swim
-    const duration = 3800 + Math.random() * 2800; // ms
-    const travelPx = window.innerWidth + 200;
-    const startTime = performance.now();
-
+    const yOffset = window.innerHeight * 0.16;
+    // Timestamps come only from the animation frame — performance.now() has a
+    // different origin in some WebViews, which previously made turtles invisible.
+    let last = null;
     function frame(now){
-      const t = Math.min(1, (now - startTime) / duration);
-      const progressX = goingRight ? t : (1 - t);
-      const xPx = -100 + progressX * travelPx;
-
-      const wobblePhase = t * wobbleFreq * Math.PI * 2;
-      const yVh = startYVh + (endYVh - startYVh) * t + Math.sin(wobblePhase) * wobbleAmpVh;
-
-      // Analytical derivative of the path above, not a numerical approximation —
-      // avoids edge-case wobble at t=0/t=1 and stays exact every frame.
-      const dxDt = (goingRight ? 1 : -1) * travelPx;
-      const dyDtVh = (endYVh - startYVh) + wobbleAmpVh * wobbleFreq * Math.PI * 2 * Math.cos(wobblePhase);
-      const dyDtPx = dyDtVh * (window.innerHeight / 100);
-      // Base image faces "up" (north) at rotate(0), so +90° converts the standard
-      // atan2 angle (0°=east) into "angle from north" to match that orientation.
-      const angleDeg = Math.atan2(dyDtPx, dxDt) * (180 / Math.PI) + 90;
-
-      turtle.style.left = xPx + 'px';
-      turtle.style.top = yVh + 'vh';
-      turtle.style.transform = `rotate(${angleDeg}deg)`;
-
-      if(t < 1){
-        requestAnimationFrame(frame);
-      } else {
-        turtle.remove();
-      }
+      if(last === null) last = now;
+      const dt = now - last; last = now;
+      const pose = stepTurtleSwim(leg, dt);
+      if(!pose){ turtle.remove(); return; }
+      turtle.style.left = pose.x + 'px';
+      turtle.style.top = (yOffset + pose.y) + 'px';
+      turtle.style.opacity = String(pose.opacity);
+      turtle.style.filter = `blur(${pose.blur.toFixed(2)}px)`;
+      turtle.style.transform = `rotate(${pose.angle}deg) scale(${pose.scale.toFixed(3)})`;
+      setSpriteFrame(turtle, leg.sprite, pose.frame);
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
+
 
   function escapeHtml(s){
     const d = document.createElement('div');
@@ -2679,8 +2886,8 @@
   }
 
   function stepperField(label, id, type){
-    return `<div class="tally-field"><label>${label}</label>
-      <div class="stepper">
+    return `<div class="tally-field"><label id="lbl-${id}">${label}</label>
+      <div class="stepper" role="group" aria-labelledby="lbl-${id}">
         <button type="button" class="step-btn" data-step="-1" data-target="${id}">−</button>
         <input type="text" inputmode="none" readonly class="step-value type-${type}" id="${id}" value="0">
         <button type="button" class="step-btn" data-step="1" data-target="${id}">+</button>
@@ -3026,9 +3233,9 @@
     div.className = 'rare-block';
     div.dataset.idx = idx;
     div.innerHTML = `
-      <button type="button" class="rm-rare" data-idx="${idx}">✕</button>
+      <button type="button" class="rm-rare" data-idx="${idx}" aria-label="Close">✕</button>
       <div class="field" style="margin-bottom:8px;">
-        <label>Species</label>
+        <label for="${idPrefix}r_${idx}_species">Species</label>
         <select id="${idPrefix}r_${idx}_species">
           <option value="leatherback">Leatherback</option>
           <option value="kemps">Kemp's Ridley</option>
@@ -3036,7 +3243,7 @@
         </select>
       </div>
       <div class="field" id="${idPrefix}r_${idx}_namewrap" style="display:none; margin-bottom:8px;">
-        <label>Species name</label>
+        <label for="${idPrefix}r_${idx}_name">Species name</label>
         <input type="text" id="${idPrefix}r_${idx}_name" placeholder="e.g. Hawksbill">
       </div>
       <div class="tally-fields">
@@ -6033,7 +6240,21 @@
   document.getElementById('ctDeleteLatest').addEventListener('click', ctDeleteLatest);
   document.getElementById('agolSettingsSyncBtn').addEventListener('click', async ()=>{ await agolPull(); });
   document.getElementById('agolSettingsWriteBtn').addEventListener('click', async ()=>{ await agolPush(); });
-  document.getElementById('agolStatusBar').addEventListener('click', async ()=>{ await agolPull(); });
+  // role="button" without keyboard handling is a trap for anyone not using
+  // touch — Enter and Space must do what a click does.
+  const agolBarEl = document.getElementById('agolStatusBar');
+  agolBarEl.addEventListener('click', async ()=>{ await agolPull(); });
+  agolBarEl.addEventListener('keydown', async (e)=>{
+    if(e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+      e.preventDefault();
+      await agolPull();
+    }
+  });
+  // It's a span acting as a button, so give it the keyboard behaviour a real
+  // button would have.
+  document.getElementById('agolStatusBar').addEventListener('keydown', async (e)=>{
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); await agolPull(); }
+  });
   document.getElementById('npsLogoBtn').addEventListener('click', swimTurtleAcross);
 
   // Rare hidden turtle on ordinary button taps — roughly 1 in 25, so it's a
@@ -6069,6 +6290,15 @@
   // once init has finished AND a short minimum has elapsed — without that floor
   // it would flash for a few milliseconds on a fast load, which reads as a
   // glitch rather than a title screen.
+  // The title screen is a once-a-day thing: a nice start to a shift, but seeing
+  // it on every relaunch mid-survey is just friction.
+  function splashAlreadyShownToday(){
+    try{ return localStorage.getItem('field-notes-splash-day') === todayStr(); }
+    catch(e){ return false; }
+  }
+  function markSplashShownToday(){
+    try{ localStorage.setItem('field-notes-splash-day', todayStr()); }catch(e){}
+  }
   const SPLASH_MIN_MS = 4200;   // long enough to read the title and watch the turtle swim
   const SPLASH_PEEL_MS = 1700;  // how long the page takes to peel away
   const splashStart = Date.now();
@@ -6094,8 +6324,17 @@
     if(state?.meta?.turtlesEnabled === false){ outer.style.display = 'none'; return; }
 
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const picked0 = pickTurtleTemplate();
-    if(picked0 && picked0.el) inner.src = picked0.el.src;
+    const applySprite = (spr) => {
+      if(!spr) return;
+      inner.style.backgroundImage = `url(${spr.src})`;
+      inner.style.backgroundSize = `${spr.frames*100}% 100%`;
+      inner.style.width = (spr.w * TURTLE_SCALE) + 'px';
+      inner.style.height = (spr.h * TURTLE_SCALE) + 'px';
+    };
+    // (sprite is applied from the leg itself below — a separate pick here used
+    // to give the first leg a DIFFERENT species than the one its frame math
+    // assumed, so the sheet and the frame index disagreed and you'd see bits of
+    // two frames, off-centre.)
     if(reduceMotion){
       outer.style.transform = 'translateX(40vw)';
       inner.style.transform = 'translateY(70px) rotate(90deg)';
@@ -6109,78 +6348,9 @@
     const K = 4.5;
     const decay = f => (1 - Math.exp(-K*f)) / (1 - Math.exp(-K));
 
-    // Named scenarios rather than one shape with jittered numbers — each has a
-    // recognisably different character, so the title screen doesn't just show the
-    // same swim at slightly different speeds every time.
-    const TURTLE_SCENARIOS = [
-      // Steady purposeful crossing.
-      {id:'cruise',  weight:26, strokes:[13,19], amp:[8,16],  cycles:[0.8,1.6], drift:0.25, driftMs:[700,1400],  wait:[600,2200], depth:'any'},
-      // Lazy meander: lots of weave, frequent long drifts.
-      {id:'meander', weight:20, strokes:[14,20], amp:[20,34], cycles:[1.8,3.0], drift:0.85, driftMs:[1300,2600], wait:[700,2400], depth:'any'},
-      // Comes in, hangs almost still mid-screen, then carries on.
-      {id:'bask',    weight:14, strokes:[10,14], amp:[4,9],   cycles:[0.4,0.9], drift:1.0,  driftMs:[2600,4200], wait:[900,2600], depth:'high'},
-      // Quick, shallow, businesslike — few strokes, little weave.
-      {id:'dart',    weight:14, strokes:[8,11],  amp:[3,7],   cycles:[0.5,1.0], drift:0.0,  driftMs:[0,0],       wait:[500,1600], depth:'any'},
-      // Descends across the screen.
-      {id:'dive',    weight:13, strokes:[12,17], amp:[6,13],  cycles:[0.7,1.3], drift:0.2,  driftMs:[600,1200],  wait:[600,2000], depth:'descend'},
-      // Rises toward the surface as it goes.
-      {id:'surface', weight:13, strokes:[12,17], amp:[6,13],  cycles:[0.7,1.3], drift:0.3,  driftMs:[700,1500],  wait:[600,2000], depth:'ascend'},
-    ];
-    const rand = (a,b) => a + Math.random()*(b-a);
-    const randInt = (a,b) => a + Math.floor(Math.random()*(b-a+1));
-    function pickScenario(){
-      const total = TURTLE_SCENARIOS.reduce((s,x)=>s+x.weight,0);
-      let r = Math.random()*total;
-      for(const s of TURTLE_SCENARIOS){ r -= s.weight; if(r<=0) return s; }
-      return TURTLE_SCENARIOS[0];
-    }
-
-    function buildLeg(isFirst){
-      const picked = pickTurtleTemplate();
-      const strokeMs = (picked && TURTLE_STROKE_MS[picked.el.id]) || 700;
-      const W = window.innerWidth;
-      const playH = 150;
-      // First appearance is always a plain cruise — a drift or a dart before the
-      // turtle has been seen once just reads as the animation misbehaving.
-      const sc = isFirst ? TURTLE_SCENARIOS[0] : pickScenario();
-
-      const strokes = randInt(sc.strokes[0], sc.strokes[1]);
-      const hasDrift = !isFirst && Math.random() < sc.drift;
-      const driftAt = hasDrift ? 2 + Math.floor(Math.random()*Math.max(1, strokes-3)) : -1;
-
-      const segs = [];
-      let acc = 0;
-      for(let n=0; n<strokes; n++){
-        segs.push({type:'s', ms:strokeMs, start:acc}); acc += strokeMs;
-        if(n === driftAt){
-          const dms = rand(sc.driftMs[0], sc.driftMs[1]);
-          segs.push({type:'d', ms:dms, start:acc}); acc += dms;
-        }
-      }
-
-      // Vertical band depends on the scenario: baskers stay up near the surface,
-      // divers work downward, and so on.
-      let yStart, yEnd;
-      if(sc.depth === 'descend'){ yStart = rand(0, playH*0.35); yEnd = rand(playH*0.6, playH); }
-      else if(sc.depth === 'ascend'){ yStart = rand(playH*0.6, playH); yEnd = rand(0, playH*0.35); }
-      else if(sc.depth === 'high'){ yStart = rand(0, playH*0.4); yEnd = rand(0, playH*0.4); }
-      else { yStart = Math.random()*playH; yEnd = Math.random()*playH; }
-
-      const units = strokes + (hasDrift ? 0.35 : 0);
-      return {
-        scenario: sc.id,
-        picked, W, playH,
-        goingRight: isFirst ? true : Math.random() < 0.5,
-        segs, durMs: acc,
-        unitDist: (W + 170) / units,
-        yStart, yEnd,
-        amp: rand(sc.amp[0], sc.amp[1]),
-        cycles: rand(sc.cycles[0], sc.cycles[1]),
-        fadeMs: 700,
-        waitMs: isFirst ? 500 : rand(sc.wait[0], sc.wait[1]),
-        t0: null
-      };
-    }
+    // Scenario machinery lives at module scope (TURTLE_SCENARIOS) so the splash
+    // turtle and the swim-across turtles share exactly the same motion.
+    const buildLeg = (isFirst) => createTurtleSwim({isFirst, W: window.innerWidth, playH: 150});
 
     // Distance covered by elapsed time: each stroke is a thrust that decays to a
     // glide; a drift segment creeps forward at a fraction of that, so the turtle
@@ -6198,46 +6368,38 @@
     }
 
     let leg = buildLeg(true);
+    applySprite(leg.sprite);
     let waitingUntil = 0;
+    let last = null;
 
     function frame(now){
       const splash = document.getElementById('splashScreen');
       if(!splash || splash.style.display === 'none'){ splashTurtleRAF = null; return; }
 
-      if(waitingUntil){
-        if(now < waitingUntil){ splashTurtleRAF = requestAnimationFrame(frame); return; }
+      if(last === null) last = now;
+      const dt = now - last; last = now;
+
+      if(waitingUntil > 0){
+        waitingUntil -= dt;
+        if(waitingUntil > 0){ splashTurtleRAF = requestAnimationFrame(frame); return; }
         waitingUntil = 0;
         leg = buildLeg(false);
-        if(leg.picked && leg.picked.el) inner.src = leg.picked.el.src;
+        applySprite(leg.sprite);
       }
-      if(leg.t0 === null) leg.t0 = now;
 
-      const e = now - leg.t0;
-      if(e >= leg.durMs){
+      const pose = stepTurtleSwim(leg, dt);
+      if(!pose){
         outer.style.opacity = '0';
-        waitingUntil = now + leg.waitMs;
-        leg.t0 = null;
+        waitingUntil = leg.waitMs;
         splashTurtleRAF = requestAnimationFrame(frame);
         return;
       }
 
-      const p = e / leg.durMs;
-      const d = distAt(leg, e);
-      const x = leg.goingRight ? (-85 + d) : (leg.W + 85 - d);
-      const y = leg.yStart + (leg.yEnd - leg.yStart)*p
-              + Math.sin(2*Math.PI*leg.cycles*p) * leg.amp;
-
-      // True heading from the actual direction of travel, so it banks into its
-      // turns instead of sliding through them flat.
-      const dyDp = (leg.yEnd - leg.yStart) + leg.amp*2*Math.PI*leg.cycles*Math.cos(2*Math.PI*leg.cycles*p);
-      const dxDp = (leg.goingRight ? 1 : -1) * (leg.W + 170);
-      const angle = Math.atan2(dyDp, dxDp) * (180/Math.PI) + 90;
-
-      const fadeIn = Math.min(1, e / leg.fadeMs);
-      const fadeOut = Math.min(1, (leg.durMs - e) / leg.fadeMs);
-      outer.style.opacity = String(Math.min(fadeIn, fadeOut));
-      outer.style.transform = `translateX(${x.toFixed(1)}px)`;
-      inner.style.transform = `translateY(${y.toFixed(1)}px) rotate(${angle.toFixed(1)}deg)`;
+      outer.style.opacity = String(pose.opacity);
+      outer.style.filter = `drop-shadow(0 2px 5px rgba(0,0,0,0.45)) blur(${pose.blur.toFixed(2)}px)`;
+      outer.style.transform = `translateX(${pose.x.toFixed(1)}px)`;
+      inner.style.transform = `translateY(${pose.y.toFixed(1)}px) rotate(${pose.angle.toFixed(1)}deg) scale(${pose.scale.toFixed(3)})`;
+      setSpriteFrame(inner, leg.sprite, pose.frame);
 
       splashTurtleRAF = requestAnimationFrame(frame);
     }
@@ -6325,7 +6487,14 @@
 
 
   (async function init(){
-    initSplashTurtle();
+    // Already shown today? Skip straight to the app rather than flashing a title
+    // screen nobody asked for.
+    if(splashAlreadyShownToday()){
+      const sEl = document.getElementById('splashScreen');
+      if(sEl){ sEl.style.display = 'none'; sEl.dataset.peeling = '1'; }
+    } else {
+      initSplashTurtle();
+    }
     // Let people skip the title screen by tapping it
     const splashEl = document.getElementById('splashScreen');
     // Choosing a survey sets the mode AND starts the peel — the transition is the
@@ -6333,6 +6502,7 @@
     // accidentally before a survey has been picked.
     document.querySelectorAll('.splash-survey-btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
+        markSplashShownToday();
         state.meta.currentMode = btn.dataset.mode;
         await saveState();
         applyMode();
@@ -6376,7 +6546,7 @@
     applyMode();
     // No automatic sync anywhere — reads/writes only happen on an explicit tap:
     // Sync Now or Export. See agolPull()/agolPush() call sites.
-    dismissSplash();
+    if(!splashAlreadyShownToday()) dismissSplash();
   })();
 
 })();
